@@ -1,0 +1,20 @@
+[package]
+name = "cosmo"
+version = "0.1.0"
+edition = "2021"
+authors = ["Songyao Wang <wangsong23@mails.tsinghua.edu.cn>"]
+
+[dependencies]
+bincode = { workspace = true }
+clap = { workspace = true }
+crossbeam-channel = { workspace = true }
+crossbeam-skiplist = { workspace = true }
+dashmap = { workspace = true }
+indicatif = { workspace = true }
+memmap2 = { workspace = true }
+moka = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
+rustc-hash = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }

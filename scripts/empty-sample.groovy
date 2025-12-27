@@ -1,11 +1,11 @@
-// ===== LsmGraph 初始化脚本 =====
+// ===== Gremmunity 初始化脚本 =====
 
 // 直接创建全局变量 g
 // graph 变量由 GremlinServerGremlinPlugin 自动注入
 g = graph.traversal()
 
 println "=" * 60
-println "LsmGraph Initialized"
+println "Gremmunity Initialized"
 println "Graph type: " + graph.getClass().getName()
 println "Traversal source 'g' is now available"
 println "=" * 60

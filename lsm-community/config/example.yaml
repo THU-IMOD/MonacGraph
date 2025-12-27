@@ -1,0 +1,25 @@
+# LSM Community Storage Configuration
+
+# Block size in bytes (default: 4096)
+block_size: 4096
+
+# SST size in bytes (default: 8388608)
+min_bucket_size: 16777216
+
+# Maximum number of MemGraphs in memory (default: 3)
+num_mem_graph_limit: 5
+
+# Giant vertex boundary (default: 128)
+giant_vertex_boundary: 256
+
+# Graph name
+graph_name: "example"
+
+# Workspace directory (default: "workspace")
+work_space_dir: "/data/graph_workspace"
+
+# Block cache capacity in bytes (default: 1048576)
+block_cache_capacity: 2097152
+
+# Giant cache capacity (default: 10000)
+giant_cache_capacity: 20000

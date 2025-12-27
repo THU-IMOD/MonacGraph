@@ -1,0 +1,25 @@
+[package]
+name = "lsm-community-java"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "example"
+path = "src/example.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lsm-storage = { workspace = true }
+anyhow = { workspace = true }
+bincode = { workspace = true }
+dashmap = { workspace = true }
+jni = { workspace = true }
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
+rocksdb = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+zstd = { workspace = true }

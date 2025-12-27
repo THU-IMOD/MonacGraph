@@ -1,10 +1,13 @@
 package com.graph.rocks;
 
 import java.io.File;
+import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 /**
- * JNI bridge for Rust-based LSM-tree (RocksDB) native operations
+ * JNI bridge for LSM-Community native operations
  * Loads the native library and exposes core graph storage operations via JNI
  */
 public class RustJNI {
@@ -12,17 +15,42 @@ public class RustJNI {
     // Load native library on class initialization
     static {
         try {
-            ClassLoader loader = RustJNI.class.getClassLoader();
-            URL libUrl = loader.getResource("native/windows-x86_64/lsm_community_java.dll");
+            // 1. Get the name of OS.
+            String osName = System.getProperty("os.name").toLowerCase();
+            String resourcePath;
+            String libExtension;
 
-            if (libUrl == null) {
-                throw new RuntimeException("Native DLL library not found");
+
+            // 2. Load dyn lib according to the os name
+            if (osName.contains("win")) {
+                resourcePath = "storage/windows/lsm_community_java.dll";
+                libExtension = ".dll";
+            } else if (osName.contains("mac")) {
+                resourcePath = "storage/macos/liblsm_community_java.dylib";
+                libExtension = ".dylib";
+            } else {
+                resourcePath = "storage/linux/liblsm_community_java.so";
+                libExtension = ".so";
             }
 
-            String libPath = libUrl.toURI().getPath().replace("/", File.separator);
-            System.load(libPath);
+            // 3. Get the resource URL
+            InputStream in = RustJNI.class.getClassLoader().getResourceAsStream(resourcePath);
+            if (in == null) {
+                throw new RuntimeException("Native library not found in classpath: " + resourcePath);
+            }
+            File tempFile = File.createTempFile("liblsm_community_java", libExtension);
+            tempFile.deleteOnExit();
+
+            // 5. Copy Jar
+            Files.copy(in, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            in.close();
+
+            // 6. Load this temp file
+            // System.out.println("Loading native lib from: " + tempFile.getAbsolutePath());
+            System.load(tempFile.getAbsolutePath());
+
         } catch (Exception e) {
-            throw new RuntimeException("Failed to load lsm_community_java.dll", e);
+            throw new RuntimeException("Failed to load native library", e);
         }
     }
 

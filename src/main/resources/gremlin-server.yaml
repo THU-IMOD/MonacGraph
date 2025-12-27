@@ -3,7 +3,7 @@ port: 8182
 
 # 配置图
 graphs: {
-  graph: conf/lsm-graph.properties
+  graph: conf/lsm-community.properties
 }
 
 # 脚本引擎配置
@@ -15,8 +15,8 @@ scriptEngines: {
       org.apache.tinkerpop.gremlin.jsr223.ImportGremlinPlugin: {
         classImports: [
           java.lang.Math,
-          com.graph.rocks.LsmGraph,
-          com.graph.rocks.SecondOrderTraversalSource
+          com.graph.rocks.community.CommunityGraph,
+          com.graph.rocks.so.SecondOrderTraversalSource
         ],
         methodImports: [java.lang.Math#*]
       },

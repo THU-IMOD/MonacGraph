@@ -1,0 +1,31 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "bfs"
+path = "src/bfs.rs"
+
+[[bin]]
+name = "wcc"
+path = "src/wcc.rs"
+
+[[bin]]
+name = "cs"
+path = "src/cs.rs"
+
+[[bin]]
+name = "cd"
+path = "src/cd.rs"
+
+[[bin]]
+name = "dyn"
+path = "src/dyn.rs"
+
+[dependencies]
+lsm-storage = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+indicatif = { workspace = true }
+rand = { workspace = true }

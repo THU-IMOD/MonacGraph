@@ -1,7 +1,7 @@
 package com.graph.rocks;
 
-import org.apache.tinkerpop.gremlin.structure.*;
-
+import com.graph.rocks.community.CommunityGraph;
+import com.graph.rocks.so.SecondOrderTraversalSource;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
 import org.apache.tinkerpop.gremlin.structure.Graph;
 import org.apache.tinkerpop.gremlin.structure.T;
@@ -11,7 +11,7 @@ import java.util.*;
 
 /**
  * Demonstration class for second-order logic graph queries and basic Gremlin operations
- * on LsmGraph implementation
+ * on CommunityGraph implementation
  */
 public class Main {
 
@@ -21,10 +21,9 @@ public class Main {
      */
     public static void main(String[] args) {
         // Initialize RocksDB-backed graph instance
-        Graph graph = LsmGraph.open("my_database");
-        SecondOrderTraversalSource g = (SecondOrderTraversalSource) graph.traversal();
 
-        try {
+        try (Graph graph = CommunityGraph.open("my_database"); graph) {
+            SecondOrderTraversalSource g = (SecondOrderTraversalSource) graph.traversal();
             // ==============================
             // Step 1: Initialize sample graph data
             // ==============================
@@ -164,17 +163,12 @@ public class Main {
 
         } catch (Exception e) {
             // Handle and log any exceptions during graph operations
-            e.printStackTrace();
+            e.printStackTrace(System.err);
         } finally {
             // ==============================
-            // Cleanup: Close graph connection
+            // Cleanup: Close graph connection automatically
             // ==============================
-            try {
-                graph.close();
-                System.out.println("\n=== Graph Database Closed ===");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            System.out.println("\n=== Graph Database Closed ===");
         }
     }
 }
