@@ -123,7 +123,6 @@ public class CommunityGraph implements Graph, Serializable {
         if (!parentDir.exists() && !parentDir.mkdirs()) {
             throw new RuntimeException("Failed to create data directory: " + parentDir.getAbsolutePath());
         }
-
         // Create graph file with header initialization
         File graphFile = new File(parentDir, dbName + ".graph");
         try {

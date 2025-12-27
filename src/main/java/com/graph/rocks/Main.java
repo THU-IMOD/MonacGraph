@@ -21,7 +21,6 @@ public class Main {
      */
     public static void main(String[] args) {
         // Initialize RocksDB-backed graph instance
-
         try (Graph graph = CommunityGraph.open("my_database"); graph) {
             SecondOrderTraversalSource g = (SecondOrderTraversalSource) graph.traversal();
             // ==============================
