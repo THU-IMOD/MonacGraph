@@ -3,6 +3,7 @@ package com.graph.rocks.community;
 import com.graph.rocks.serialize.IdCodec;
 import com.graph.rocks.RustJNI;
 import com.graph.rocks.so.SecondOrderTraversalSource;
+import com.graph.rocks.reader.*;
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.BaseConfiguration;
 import org.apache.tinkerpop.gremlin.process.computer.GraphComputer;
@@ -75,6 +76,46 @@ public class CommunityGraph implements Graph, Serializable {
         }
 
         return new CommunityGraph(dbName);
+    }
+
+    /**
+     * Loads vertex properties from JSON/CSV file (data directory)
+     * Skips if filename is null, trims .json/.csv suffix automatically
+     * @param dataName File name with .json/.csv suffix
+     * @throws IOException If file access/parsing fails
+     */
+    public void loadVertexProperty(String dataName) throws IOException {
+        if (dataName == null) {
+            return;
+        }
+        if (dataName.endsWith(".json")) {
+            VertexPropertyJsonReader vReader = new VertexPropertyJsonReader(this);
+            vReader.readProperties(dataName.substring(0, dataName.length() - 5));
+        }
+        if (dataName.endsWith(".csv")) {
+            VertexPropertyCsvReader vReader = new VertexPropertyCsvReader(this);
+            vReader.readProperties(dataName.substring(0, dataName.length() - 4));
+        }
+    }
+
+    /**
+     * Loads edge properties from JSON/CSV file (data directory)
+     * Skips if filename is null, trims .json/.csv suffix automatically
+     * @param dataName File name with .json/.csv suffix
+     * @throws IOException If file access/parsing fails
+     */
+    public void loadEdgeProperty(String dataName) throws IOException {
+        if (dataName == null) {
+            return;
+        }
+        if (dataName.endsWith(".json")) {
+            EdgePropertyJsonReader eReader = new EdgePropertyJsonReader(this);
+            eReader.readProperties(dataName.substring(0, dataName.length() - 5));
+        }
+        if (dataName.endsWith(".csv")) {
+            EdgePropertyCsvReader eReader = new EdgePropertyCsvReader(this);
+            eReader.readProperties(dataName.substring(0, dataName.length() - 4));
+        }
     }
 
     /**
@@ -195,9 +236,14 @@ public class CommunityGraph implements Graph, Serializable {
      * @param id Vertex identifier (any type supported by IdCodec)
      * @return CommunityVertex instance (null if not found)
      */
-    public Vertex vertex(final Object id) {
+    public Vertex vertex(Object id) {
         byte[] outerIdBytes = IdCodec.toBytes(id);
         long vertexHandle = getVertexHandleById(graphHandle, outerIdBytes);
+        if (vertexHandle == -1) {
+            if (id instanceof Number) {
+                vertexHandle = ((Number) id).longValue();
+            }
+        }
         return new CommunityVertex(this, vertexHandle);
     }
 
@@ -347,7 +393,6 @@ public class CommunityGraph implements Graph, Serializable {
      */
     private Iterator<Edge> scanAllEdges() {
         long[] edgeHandleList = getAllEdges(graphHandle);
-
         return Arrays.stream(edgeHandleList)
                 .boxed()
                 .map(handle -> (Edge) new CommunityEdge(this, handle))

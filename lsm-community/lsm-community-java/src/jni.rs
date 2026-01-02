@@ -150,7 +150,6 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getVertexHandleById(
     match graph.vertex_id_mapper.get_inner_id(&outer_id_bytes) {
         Some(inner_id) => inner_id as jlong,
         None => {
-            let _ = env.throw_new("java/util/NoSuchElementException", "Vertex not found");
             -1
         }
     }

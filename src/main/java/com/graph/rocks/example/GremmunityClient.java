@@ -98,7 +98,7 @@ public class GremmunityClient {
         logger.info("\nTest 1: Clearing graph data");
         ResultSet results = client.submit("g.V().drop().iterate(); 'cleared'");
         List<Result> resultList = results.all().get();
-        logger.info("Graph cleared: {}", resultList);
+        logger.info("Graph cleared: {}", resultList.get(0).getObject());
 
         // Test 2: Create vertices with properties
         logger.info("\nTest 2: Creating vertices");
@@ -107,21 +107,21 @@ public class GremmunityClient {
                         "'Alice vertex created'"
         );
         resultList = results.all().get();
-        logger.info("Created Alice vertex: {}", resultList);
+        logger.info("Created Alice vertex: {}", resultList.get(0).getObject());
 
         results = client.submit(
                 "g.addV('user').property('name', 'Bob').property('age', 30).next(); " +
                         "'Bob vertex created'"
         );
         resultList = results.all().get();
-        logger.info("Created Bob vertex: {}", resultList);
+        logger.info("Created Bob vertex: {}", resultList.get(0).getObject());
 
         results = client.submit(
                 "g.addV('product').property('name', '手机').property('price', 2999).next(); " +
                         "'Phone vertex created'"
         );
         resultList = results.all().get();
-        logger.info("Created Phone vertex: {}", resultList);
+        logger.info("Created Phone vertex: {}", resultList.get(0).getObject());
 
         // Test 3: Query vertices by label
         logger.info("\nTest 3: Querying user vertices");
@@ -140,7 +140,7 @@ public class GremmunityClient {
                         "'Edges created between vertices'"
         );
         resultList = results.all().get();
-        logger.info("Created edges: {}", resultList);
+        logger.info("Created edges: {}", resultList.get(0).getObject());
 
         // Test 5: Execute graph traversal queries
         logger.info("\nTest 5: Executing traversal queries");
@@ -160,11 +160,11 @@ public class GremmunityClient {
         logger.info("\nTest 6: Executing count queries");
         results = client.submit("g.V().count().next()");
         resultList = results.all().get();
-        logger.info("Total vertices in graph: {}", resultList);
+        logger.info("Total vertices in graph: {}", resultList.get(0).getObject());
 
         results = client.submit("g.E().count().next()");
         resultList = results.all().get();
-        logger.info("Total edges in graph: {}", resultList);
+        logger.info("Total edges in graph: {}", resultList.get(0).getObject());
 
         // Test 7: Update vertex properties
         logger.info("\nTest 7: Updating vertex properties");
@@ -173,7 +173,7 @@ public class GremmunityClient {
                         "g.V().has('name', 'Alice').values('age').next()"
         );
         resultList = results.all().get();
-        logger.info("Alice's updated age: {}", resultList);
+        logger.info("Alice's updated age: {}", resultList.get(0).getObject());
 
         // Test completion
         logger.info("\n{}", "=".repeat(60));

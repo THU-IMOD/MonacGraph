@@ -1,0 +1,21 @@
+outVertex,inVertex,label,type,since,details
+0,2,relationship,friend,2014,Alice and Charlie became friends in 2014
+1,0,relationship,colleague,2016,Bob and Alice started working together in 2016
+1,2,relationship,family,2010,Bob and Charlie are siblings since 2010
+1,3,relationship,friend,2017,Bob and David became friends in 2017
+2,3,relationship,colleague,2018,Charlie and David started working together in 2018
+3,0,relationship,mentor,2015,David has been Alice's mentor since 2015
+3,4,relationship,family,2010,David and Eva are cousins since 2010
+3,11,relationship,friend,2019,David and Leo became friends in 2019
+4,6,relationship,friend,2020,Eva and Grace became friends in 2020
+4,7,relationship,family,2012,Eva and Henry are sisters since 2012
+5,4,relationship,mentor,2015,Frank has been Eva's mentor since 2015
+6,5,relationship,colleague,2018,Grace and Frank started working together in 2018
+7,3,relationship,family,2011,Henry and David are siblings since 2011
+7,8,relationship,friend,2020,Henry and Irene became friends in 2020
+7,9,relationship,mentor,2021,Henry has been Jack's mentor since 2021
+8,9,relationship,colleague,2019,Irene and Jack started working together in 2019
+8,10,relationship,family,2013,Irene and Karen are cousins since 2013
+10,7,relationship,friend,2022,Karen and Henry became friends in 2022
+10,9,relationship,family,2008,Karen and Jack are siblings since 2008
+11,12,relationship,colleague,2015,Leo and Mona started working together in 2015

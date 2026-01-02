@@ -1,0 +1,162 @@
+[
+  {
+    "outVertex": 0,
+    "inVertex": 2,
+    "label": "relationship",
+    "type": "friend",
+    "since": 2014,
+    "details": "Alice and Charlie became friends in 2014"
+  },
+  {
+    "outVertex": 1,
+    "inVertex": 0,
+    "label": "relationship",
+    "type": "colleague",
+    "since": 2016,
+    "details": "Bob and Alice started working together in 2016"
+  },
+  {
+    "outVertex": 1,
+    "inVertex": 2,
+    "label": "relationship",
+    "type": "family",
+    "since": 2010,
+    "details": "Bob and Charlie are siblings since 2010"
+  },
+  {
+    "outVertex": 1,
+    "inVertex": 3,
+    "label": "relationship",
+    "type": "friend",
+    "since": 2017,
+    "details": "Bob and David became friends in 2017"
+  },
+  {
+    "outVertex": 2,
+    "inVertex": 3,
+    "label": "relationship",
+    "type": "colleague",
+    "since": 2018,
+    "details": "Charlie and David started working together in 2018"
+  },
+  {
+    "outVertex": 3,
+    "inVertex": 0,
+    "label": "relationship",
+    "type": "mentor",
+    "since": 2015,
+    "details": "David has been Alice's mentor since 2015"
+  },
+  {
+    "outVertex": 3,
+    "inVertex": 4,
+    "label": "relationship",
+    "type": "family",
+    "since": 2010,
+    "details": "David and Eva are cousins since 2010"
+  },
+  {
+    "outVertex": 3,
+    "inVertex": 11,
+    "label": "relationship",
+    "type": "friend",
+    "since": 2019,
+    "details": "David and Leo became friends in 2019"
+  },
+  {
+    "outVertex": 4,
+    "inVertex": 6,
+    "label": "relationship",
+    "type": "friend",
+    "since": 2020,
+    "details": "Eva and Grace became friends in 2020"
+  },
+  {
+    "outVertex": 4,
+    "inVertex": 7,
+    "label": "relationship",
+    "type": "family",
+    "since": 2012,
+    "details": "Eva and Henry are sisters since 2012"
+  },
+  {
+    "outVertex": 5,
+    "inVertex": 4,
+    "label": "relationship",
+    "type": "mentor",
+    "since": 2015,
+    "details": "Frank has been Eva's mentor since 2015"
+  },
+  {
+    "outVertex": 6,
+    "inVertex": 5,
+    "label": "relationship",
+    "type": "colleague",
+    "since": 2018,
+    "details": "Grace and Frank started working together in 2018"
+  },
+  {
+    "outVertex": 7,
+    "inVertex": 3,
+    "label": "relationship",
+    "type": "family",
+    "since": 2011,
+    "details": "Henry and David are siblings since 2011"
+  },
+  {
+    "outVertex": 7,
+    "inVertex": 8,
+    "label": "relationship",
+    "type": "friend",
+    "since": 2020,
+    "details": "Henry and Irene became friends in 2020"
+  },
+  {
+    "outVertex": 7,
+    "inVertex": 9,
+    "label": "relationship",
+    "type": "mentor",
+    "since": 2021,
+    "details": "Henry has been Jack's mentor since 2021"
+  },
+  {
+    "outVertex": 8,
+    "inVertex": 9,
+    "label": "relationship",
+    "type": "colleague",
+    "since": 2019,
+    "details": "Irene and Jack started working together in 2019"
+  },
+  {
+    "outVertex": 8,
+    "inVertex": 10,
+    "label": "relationship",
+    "type": "family",
+    "since": 2013,
+    "details": "Irene and Karen are cousins since 2013"
+  },
+  {
+    "outVertex": 10,
+    "inVertex": 7,
+    "label": "relationship",
+    "type": "friend",
+    "since": 2022,
+    "details": "Karen and Henry became friends in 2022"
+  },
+  {
+    "outVertex": 10,
+    "inVertex": 9,
+    "label": "relationship",
+    "type": "family",
+    "since": 2008,
+    "details": "Karen and Jack are siblings since 2008"
+  },
+  {
+    "outVertex": 11,
+    "inVertex": 12,
+    "label": "relationship",
+    "type": "colleague",
+    "since": 2015,
+    "details": "Leo and Mona started working together in 2015"
+  }
+]

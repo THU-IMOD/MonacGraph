@@ -20,10 +20,10 @@ public class CommunityEdge extends CommunityElement implements Edge {
     // Prefix for edge keys in RocksDB storage
     public static final byte[] EDGE_PREFIX = "EDGE:".getBytes();
 
-    private final CommunityVertex outVertex;  // Outgoing vertex (source)
-    private final CommunityVertex inVertex;   // Incoming vertex (target)
-    private final Map<String, Property<?>> properties;  // Edge properties cache
-    private final long edgeHandle;               // Native handle for RocksDB JNI operations
+    private CommunityVertex outVertex;  // Outgoing vertex (source)
+    private CommunityVertex inVertex;   // Incoming vertex (target)
+    private Map<String, Property<?>> properties;  // Edge properties cache
+    private long edgeHandle;               // Native handle for RocksDB JNI operations
 
     /**
      * Get the native edge handle for LSM-Community JNI operations
@@ -82,6 +82,41 @@ public class CommunityEdge extends CommunityElement implements Edge {
     }
 
     /**
+     * Updates edge's label and properties, overwriting existing ones
+     *
+     * @param label New edge label
+     * @param keyValues New property key-value pairs (even-length array: key1, value1, ...)
+     */
+    public void setData(final String label, final Object... keyValues) {
+        this.label = label;
+        this.properties = new HashMap<>();
+
+        // Validate and clean property key-value pairs
+        ElementHelper.legalPropertyKeyValueArray(keyValues);
+        List<Object> cleanedList = new ArrayList<>();
+
+        for (int i = 0; i < keyValues.length; i += 2) {
+            Object keyObj = keyValues[i];
+            Object value = keyValues[i + 1];
+            String key = keyObj.toString();
+
+            // Filter hidden/empty keys (per TinkerPop specifications)
+            if (!Graph.Hidden.isHidden(key) && !key.isEmpty()) {
+                cleanedList.add(keyObj);
+                cleanedList.add(value);
+            }
+        }
+
+        // Initialize properties with cleaned key-value pairs
+        Object[] cleaned = cleanedList.toArray(new Object[0]);
+        for (int i = 0; i < cleaned.length; i += 2) {
+            final String key = cleaned[i].toString();
+            final Object value = cleaned[i + 1];
+            this.properties.put(key, new CommunityProperty<>(this, key, value, graph));
+        }
+    }
+
+    /**
      * Constructor for deserializing existing edges from LSM-Community handle
      * @param graph Parent graph instance
      * @param edgeHandle Native edge handle from LSM-Community
@@ -92,6 +127,16 @@ public class CommunityEdge extends CommunityElement implements Edge {
 
         // Retrieve and deserialize edge data from LSM-Community
         byte[] data = getDataFromEdgeHandle(graph.handle(), edgeHandle);
+
+        if (data == null || data.length == 0) {
+            this.edgeHandle = edgeHandle;
+            this.id = edgeHandle;
+            this.outVertex = new CommunityVertex(graph, (edgeHandle >>> 32) & 0xFFFFFFFFL);
+            this.inVertex = new CommunityVertex(graph, edgeHandle & 0xFFFFFFFFL);
+            this.properties = null;
+            return;
+        }
+
         try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
              GZIPInputStream gzis = new GZIPInputStream(bais);
              ObjectInputStream ois = new ObjectInputStream(gzis)) {

@@ -28,6 +28,13 @@ public class IdCodec {
             return ((String) id).getBytes(StandardCharsets.UTF_8);
         }
 
+//        if (id instanceof Integer) {
+//            // 先将 Integer 拆箱为 int，再转为 long，最后包装为 Long 对象
+//            long idLong = ((Integer) id).longValue();
+//            id = Long.valueOf(idLong); // 此时 id 是 Long 类型的对象
+//            System.out.println("transfer " + id.getClass()); // 输出：class java.lang.Long
+//        }
+
         // Use Java serialization for other types (e.g., Long, Integer, etc.)
         try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
              ObjectOutputStream oos = new ObjectOutputStream(byteArrayOutputStream)) {

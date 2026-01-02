@@ -21,7 +21,7 @@ import static org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality.
 public class CommunityVertex extends CommunityElement implements Vertex {
 
     public static final byte[] VERTEX_PREFIX = "V:".getBytes();
-    private final Map<String, VertexProperty<?>> properties;
+    private Map<String, VertexProperty<?>> properties;
     private final long vertexHandle;
 
     /**
@@ -89,6 +89,40 @@ public class CommunityVertex extends CommunityElement implements Vertex {
     }
 
     /**
+     * Updates vertex's label and properties, overwriting existing ones
+     *
+     * @param label New vertex label
+     * @param keyValues New property key-value pairs (even-length array: key1, value1, ...)
+     */
+    public void setData(final String label, final Object... keyValues) {
+        this.label = label;
+        this.properties = new HashMap<>();
+        // Validate and clean property key-value pairs
+        ElementHelper.legalPropertyKeyValueArray(keyValues);
+        List<Object> cleanedList = new ArrayList<>();
+        for (int i = 0; i < keyValues.length; i += 2) {
+            Object keyObj = keyValues[i];
+            Object value = keyValues[i + 1];
+            String key = keyObj.toString();
+
+            // Filter hidden/empty keys
+            if (!Graph.Hidden.isHidden(key) && !key.isEmpty()) {
+                cleanedList.add(keyObj);
+                cleanedList.add(value);
+            }
+        }
+
+        // Initialize properties
+        Object[] cleaned = cleanedList.toArray(new Object[0]);
+        for (int i = 0; i < cleaned.length; i += 2) {
+            final String key = cleaned[i].toString();
+            final Object value = cleaned[i + 1];
+            this.properties.put(key, new CommunityVertexProperty<>(generateId(), this, key, value));
+        }
+    }
+
+
+    /**
      * Constructor for deserializing existing vertices from LSM-Community
      * @param graph Parent graph instance
      * @param vertexHandle Existing vertex handle
@@ -96,6 +130,13 @@ public class CommunityVertex extends CommunityElement implements Vertex {
     public CommunityVertex(final CommunityGraph graph, long vertexHandle) {
         super("", "vertex", graph);
         byte[] data = getDataFromVertexHandle(graph.handle(), vertexHandle);
+
+        if (data == null || data.length == 0) {
+            this.vertexHandle = vertexHandle;
+            this.id = vertexHandle;
+            this.properties = null;
+            return;
+        }
 
         try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
              GZIPInputStream gzis = new GZIPInputStream(bais);

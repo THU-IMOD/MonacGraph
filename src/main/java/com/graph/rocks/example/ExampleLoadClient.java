@@ -48,6 +48,9 @@ public class ExampleLoadClient {
 
             // Execute comprehensive graph operation tests
             runTests(client);
+
+            // Additional operations from Test.java
+            runTestOperations(client);
         } catch (Exception e) {
             logger.error("Error during graph operations", e);
             e.printStackTrace(System.err);
@@ -79,6 +82,10 @@ public class ExampleLoadClient {
         );
         results.all().get();
 
+        // Load properties from Test.java
+        client.submit("graph.loadVertexProperty('exampleVertexProperty.json')").all().get();
+        client.submit("graph.loadEdgeProperty('exampleEdgeProperty.csv')").all().get();
+
         logger.info("Session initialized with CommunityGraph and 'g' traversal source");
         logger.info("=".repeat(60));
     }
@@ -92,23 +99,52 @@ public class ExampleLoadClient {
      */
     private static void runTests(Client client) throws Exception {
         logger.info("\n{}", "=".repeat(60));
-        logger.info("开始读取example.graph数据");
+        logger.info("Starting to read example.graph data");
         logger.info("=".repeat(60));
 
-        // 1. 查询所有顶点数量
-        logger.info("\n查询1: 总顶点数量");
+        // 1. Query total number of vertices
+        logger.info("\nQuery 1: Total number of vertices");
         ResultSet results = client.submit("g.V().count().next()");
         List<Result> resultList = results.all().get();
-        logger.info("顶点总数: {}", resultList);
+        logger.info("Total number of vertices: {}", resultList.get(0).getObject());
 
-        logger.info("\n查询6: 总边数量");
+        // 2. Query total number of edges
+        logger.info("\nQuery 2: Total number of edges");
         results = client.submit("g.E().count().next()");
         resultList = results.all().get();
-        logger.info("边总数: {}", resultList);
+        logger.info("Total number of edges: {}", resultList.get(0).getObject());
 
-        // 读取操作完成
         logger.info("\n{}", "=".repeat(60));
-        logger.info("example.graph数据读取完成");
+        logger.info("example.graph data reading completed");
+        logger.info("=".repeat(60));
+    }
+
+    /**
+     * Additional operations from Test.java adapted for client-server model
+     */
+    private static void runTestOperations(Client client) throws Exception {
+        logger.info("\n{}", "=".repeat(60));
+        logger.info("Executing additional test operations");
+        logger.info("=".repeat(60));
+
+        // Get vertex values for IDs 0-12
+        logger.info("\nVertex values (ID 0-12):");
+        for (int i = 0; i < 13; i++) {
+            ResultSet results = client.submit("g.V(" + i + ").values('name').toList()");
+            List<Result> resultList = results.all().get();
+            logger.info("Vertex {} values: {}", i, resultList.get(0).getObject());
+        }
+
+        // Get edge details
+        logger.info("\nEdge details:");
+        ResultSet edgeResults = client.submit("g.E().values('details').toList()");
+        List<Result> edgeDetails = edgeResults.all().get();
+        for (Result detail : edgeDetails) {
+            logger.info(detail.getObject().toString());
+        }
+
+        logger.info("\n{}", "=".repeat(60));
+        logger.info("Additional test operations completed");
         logger.info("=".repeat(60));
     }
 }

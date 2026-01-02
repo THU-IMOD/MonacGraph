@@ -1,0 +1,93 @@
+[
+  {
+    "vertex": 0,
+    "label": "person",
+    "name": "Alice",
+    "age": 30,
+    "city": "New York"
+  },
+  {
+    "vertex": 1,
+    "label": "person",
+    "name": "Bob",
+    "age": 25,
+    "city": "Los Angeles"
+  },
+  {
+    "vertex": 2,
+    "label": "person",
+    "name": "Charlie",
+    "age": 28,
+    "city": "Chicago"
+  },
+  {
+    "vertex": 3,
+    "label": "person",
+    "name": "David",
+    "age": 35,
+    "city": "San Francisco"
+  },
+  {
+    "vertex": 4,
+    "label": "person",
+    "name": "Eva",
+    "age": 22,
+    "city": "Boston"
+  },
+  {
+    "vertex": 5,
+    "label": "person",
+    "name": "Frank",
+    "age": 40,
+    "city": "Seattle"
+  },
+  {
+    "vertex": 6,
+    "label": "person",
+    "name": "Grace",
+    "age": 31,
+    "city": "Miami"
+  },
+  {
+    "vertex": 7,
+    "label": "person",
+    "name": "Henry",
+    "age": 27,
+    "city": "Houston"
+  },
+  {
+    "vertex": 8,
+    "label": "person",
+    "name": "Irene",
+    "age": 26,
+    "city": "Denver"
+  },
+  {
+    "vertex": 9,
+    "label": "person",
+    "name": "Jack",
+    "age": 29,
+    "city": "Phoenix"
+  },
+  {
+    "vertex": 10,
+    "label": "person",
+    "name": "Karen",
+    "age": 33,
+    "city": "Austin"
+  },
+  {
+    "vertex": 11,
+    "label": "person",
+    "name": "Leo",
+    "age": 24,
+    "city": "Dallas"
+  },
+  {
+    "vertex": 12,
+    "label": "person",
+    "name": "Mona",
+    "age": 38,
+    "city": "Atlanta"
+  }
+]
