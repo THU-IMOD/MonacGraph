@@ -1,12 +1,12 @@
 host: localhost
 port: 8182
 
-# 配置图
+# Configure Graph
 graphs: {
   graph: conf/lsm-community.properties
 }
 
-# 脚本引擎配置
+# Script Engine Configuration
 scriptEngines: {
   gremlin-groovy: {
     plugins: {
@@ -27,12 +27,11 @@ scriptEngines: {
   }
 }
 
-
-# 序列化器
+# Serializers Configuration
 serializers:
   - { className: org.apache.tinkerpop.gremlin.util.ser.GraphSONMessageSerializerV3 }
 
-# 处理器
+# Processors Configuration
 processors:
   - { className: org.apache.tinkerpop.gremlin.server.op.session.SessionOpProcessor,
       config: {
@@ -42,7 +41,7 @@ processors:
   }
   - { className: org.apache.tinkerpop.gremlin.server.op.traversal.TraversalOpProcessor}
 
-# 其他配置
+# Other Configurations
 metrics: {
   consoleReporter: {enabled: false},
   slf4jReporter: {enabled: false}

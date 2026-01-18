@@ -1,9 +1,6 @@
-// Session 初始化脚本
-// 每次 session 启动时执行
+import com.graph.rocks.community.CommunityGraph
+import com.graph.rocks.so.SecondOrderTraversalSource
 
-// 获取 graph 并创建 g
-g = graph.traversal()
+graph = CommunityGraph.open('db')
 
-println "Session initialized with 'g' traversal source"
-
-null
+g = graph.traversal(SecondOrderTraversalSource.class)

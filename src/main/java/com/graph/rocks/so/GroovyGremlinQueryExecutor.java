@@ -10,6 +10,9 @@ import java.util.*;
  * Executes second-order logic Gremlin queries using Groovy evaluation
  * Provides core functionality for evaluating complex logical conditions
  * with existential/universal quantifiers over vertex sets
+ *
+ * Now supports manual parsing of logical expressions (||, &&, !) to ensure
+ * all results are boolean type
  */
 @SuppressWarnings("all")
 public class GroovyGremlinQueryExecutor {
@@ -42,7 +45,10 @@ public class GroovyGremlinQueryExecutor {
 
             // Convert Iterable results to List
             if (result instanceof Iterable) {
-                List<?> resultList = (List<?>) result;
+                List<Object> resultList = new ArrayList<>();
+                for (Object item : (Iterable<?>) result) {
+                    resultList.add(item);
+                }
                 return resultList;
             }
 
@@ -57,6 +63,202 @@ public class GroovyGremlinQueryExecutor {
             e.printStackTrace();
             return null;
         }
+    }
+
+    /**
+     * Manually parses and evaluates logical expressions
+     * Supports ||, &&, ! operators and parentheses
+     *
+     * @param expression Logical expression string
+     * @param variables Variable bindings
+     * @return Boolean result of the expression evaluation
+     */
+    private static boolean evaluateLogicalExpression(String expression, Map<String, Object> variables) {
+        expression = expression.trim();
+
+        // Handle parentheses (recursive parsing)
+        while (true) {
+            String nextExpression = evaluateParentheses(expression, variables);
+            if (nextExpression == expression) {
+                break;
+            }
+            expression = nextExpression;
+        }
+
+        // Handle || operator (lowest priority)
+        List<String> orParts = splitByOperator(expression, "||");
+        if (orParts.size() > 1) {
+            for (String part : orParts) {
+                if (evaluateLogicalExpression(part.trim(), variables)) {
+                    return true;  // Short-circuit evaluation
+                }
+            }
+            return false;
+        }
+
+        // Handle && operator (medium priority)
+        List<String> andParts = splitByOperator(expression, "&&");
+        if (andParts.size() > 1) {
+            for (String part : andParts) {
+                if (!evaluateLogicalExpression(part.trim(), variables)) {
+                    return false;  // Short-circuit evaluation
+                }
+            }
+            return true;
+        }
+
+        // Handle ! operator (highest priority)
+        if (expression.trim().startsWith("!")) {
+            String innerExpr = expression.trim().substring(1).trim();
+            return !evaluateLogicalExpression(innerExpr, variables);
+        }
+
+        // Basic expression: execute query and convert to boolean value
+        return evaluateBasicExpression(expression, variables);
+    }
+
+    /**
+     * Processes expressions within parentheses
+     *
+     * @param expression Expression containing parentheses
+     * @param variables Variable bindings
+     * @return New expression with parentheses content replaced by evaluation result
+     */
+    private static String evaluateParentheses(String expression, Map<String, Object> variables) {
+        // Find the innermost parentheses
+        int openIndex = -1;
+        int closeIndex = -1;
+        int len = expression.length();
+
+        for (int i = len - 1; i >= 0 ; i--) {
+            if (expression.charAt(i) == '(') {
+                if (i == 0) {
+                    openIndex = i;
+                    break;
+                } else {
+                    char pre = expression.charAt(i - 1);
+                    if (!('a' <= pre && pre <= 'z' || 'A' <= pre && pre <= 'Z' || '0' <= pre && pre <= '9')) {
+                        openIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (openIndex != -1) {
+            int badBracket = 0;
+            for (int i = openIndex + 1; i < len; i++) {
+                if (expression.charAt(i) == '(') {
+                    badBracket++;
+                }
+                if (expression.charAt(i) == ')') {
+                    if (badBracket == 0) {
+                        closeIndex = i;
+                        break;
+                    }
+                    badBracket--;
+                }
+            }
+        }
+
+        if (openIndex == -1 || closeIndex == -1) {
+            return expression;
+        }
+
+        // Extract the expression inside the parentheses
+        String innerExpr = expression.substring(openIndex + 1, closeIndex);
+
+        // Recursively evaluate the inner expression
+        boolean result = evaluateLogicalExpression(innerExpr, variables);
+
+        // Replace the parentheses expression with the result
+        String before = expression.substring(0, openIndex);
+        String after = expression.substring(closeIndex + 1);
+
+        return before + result + after;
+    }
+
+    /**
+     * Splits expression by specified operator (considering nested parentheses)
+     *
+     * @param expression Target expression
+     * @param operator Operator to split on ("||" or "&&")
+     * @return List of split expression parts
+     */
+    private static List<String> splitByOperator(String expression, String operator) {
+        List<String> parts = new ArrayList<>();
+        int parenthesesLevel = 0;
+        int lastSplit = 0;
+
+        for (int i = 0; i < expression.length(); i++) {
+            char c = expression.charAt(i);
+
+            if (c == '(') {
+                parenthesesLevel++;
+            } else if (c == ')') {
+                parenthesesLevel--;
+            } else if (parenthesesLevel == 0) {
+                // Check operator only outside parentheses
+                if (i < expression.length() - operator.length() + 1) {
+                    String sub = expression.substring(i, i + operator.length());
+                    if (sub.equals(operator)) {
+                        parts.add(expression.substring(lastSplit, i));
+                        lastSplit = i + operator.length();
+                        i += operator.length() - 1;  // Skip the operator
+                    }
+                }
+            }
+        }
+
+        // Add the last part of the expression
+        if (lastSplit < expression.length()) {
+            parts.add(expression.substring(lastSplit));
+        }
+
+        // Return original expression if no operator found
+        if (parts.isEmpty()) {
+            parts.add(expression);
+        }
+
+        return parts;
+    }
+
+    /**
+     * Evaluates basic expressions (without logical operators)
+     *
+     * @param expression Basic expression string
+     * @param variables Variable bindings
+     * @return Boolean result of the basic expression
+     */
+    private static boolean evaluateBasicExpression(String expression, Map<String, Object> variables) {
+        expression = expression.trim();
+
+        // Return directly if expression is "true" or "false"
+        if ("true".equalsIgnoreCase(expression)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(expression)) {
+            return false;
+        }
+
+        // Execute Gremlin query
+        Object result = executeGremlinQuery(expression, variables);
+
+        // Convert result to boolean value
+        if (result == null) {
+            return false;
+        }
+
+        if (result instanceof Boolean) {
+            return (Boolean) result;
+        }
+
+        if (result instanceof List) {
+            return !((List<?>) result).isEmpty();
+        }
+
+        // Treat other types as true
+        return true;
     }
 
     /**
@@ -81,8 +283,7 @@ public class GroovyGremlinQueryExecutor {
 
         // Base case: all variables bound - evaluate the query
         if (index >= conditions.size()) {
-            Object result = executeGremlinQuery(groovyQuery, variables);
-            return result != null && !((List<?>) result).isEmpty();
+            return evaluateLogicalExpression(groovyQuery, variables);
         }
 
         Map.Entry<String, String> condition = conditions.get(index);
