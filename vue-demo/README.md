@@ -191,55 +191,6 @@ The built files will be in the `dist/` directory.
 2. Check query syntax
 3. Verify graph data exists
 
-## 🎯 For SIGIR Demo Paper
-
-This interface is designed for the SIGIR 2026 Demo Paper submission. Key features for demo:
-
-### Demo Scenarios
-
-1. **Academic Collaborator Recommendation**
-2. **Social Community Detection**
-3. **Product Recommendation**
-4. **Knowledge Graph Search**
-5. **Citation Analysis**
-
-### Recording Demo Video
-
-1. Start with connection screen
-2. Load example dataset
-3. Run each demo scenario
-4. Show graph visualization
-5. Display query results
-6. Show performance metrics
-
-## 📚 Dependencies
-
-- **Vue 3** - Progressive JavaScript framework
-- **Vite** - Next generation frontend tooling
-- **Element Plus** - Vue 3 component library
-- **Pinia** - Vue Store (state management)
-- **Cytoscape.js** - Graph visualization library
-- **Gremlin JavaScript** - Apache TinkerPop Gremlin client
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## 📄 License
-
-[Your License Here]
-
-## 🔗 Links
-
-- [Gremlin Documentation](https://tinkerpop.apache.org/docs/current/reference/)
-- [Cytoscape.js](https://js.cytoscape.org/)
-- [Element Plus](https://element-plus.org/)
-- [Vue 3](https://vuejs.org/)
-
 ## 📧 Contact
 
-For questions or support, please contact [your-email@example.com]
+For questions or support, please contact [jinyt23@mails.tsinghua.edu.cn]
