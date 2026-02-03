@@ -52,7 +52,7 @@ Run the Web Client:
 
 ```bash
 # 1. Navigate to the demo (web client) subdirectory
-cd demo
+cd web-client
 
 # 2. Install all required Node.js dependencies for the web client
 npm install
