@@ -4,10 +4,10 @@
     <el-header class="app-header">
       <div class="header-left">
         <h1 class="app-title">
-          <span class="logo">🔷</span>
           MonacGraph
         </h1>
-        <span class="subtitle">Second-Order Graph Query System</span>
+        <span class="subtitle">A Monadic Second-Order Logic Extended Graph
+Database with Community-Aware Storage</span>
       </div>
       
       <div class="header-right">
@@ -175,9 +175,6 @@
           <QueryEditor @execute="handleExecuteQuery" />
         </div>
 
-        <!-- 分割线 -->
-        <el-divider />
-
         <!-- 图可视化和结果面板 -->
         <el-container class="visualization-section">
           <!-- 图可视化或Vset浏览器 -->
@@ -204,26 +201,13 @@
     </el-container>
 
     <!-- 连接对话框 -->
-    <el-dialog
+    <ConnectionDialog
       v-model="showConnectionDialog"
-      title="Connect to MonacGraph Server"
-      width="500px"
-    >
-      <el-form :model="connectionForm" label-width="100px">
-        <el-form-item label="Host">
-          <el-input v-model="connectionForm.host" placeholder="localhost" />
-        </el-form-item>
-        <el-form-item label="Port">
-          <el-input-number v-model="connectionForm.port" :min="1" :max="65535" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showConnectionDialog = false">Cancel</el-button>
-        <el-button type="primary" @click="handleConnect" :loading="isConnecting">
-          Connect
-        </el-button>
-      </template>
-    </el-dialog>
+      :initial-host="connectionForm.host"
+      :initial-port="connectionForm.port"
+      :is-connecting="isConnecting"
+      @connect="handleConnectionSubmit"
+    />
 
     <!-- Graph Uploader Dialog -->
     <GraphUploader
@@ -243,6 +227,7 @@ import GraphVisualization from '@/components/GraphVisualization.vue'
 import ResultsPanel from '@/components/ResultsPanel.vue'
 import VsetBrowser from '@/components/VsetBrowser.vue'
 import GraphUploader from '@/components/GraphUploader.vue'
+import ConnectionDialog from '@/components/ConnectionDialog.vue'
 
 const store = useGraphStore()
 
@@ -291,7 +276,7 @@ result.size()`
     query: `g.SecondOrder()
   .forall('x')
   .exist('y')
-  .filter('g.V(x).out("knows").is(y)')
+  .filter('g.V(x).outE().is(y)')
   .execute()`
   },
   {
@@ -346,6 +331,16 @@ const handleConnect = async () => {
   } finally {
     isConnecting.value = false
   }
+}
+
+// Handle connection from new dialog component
+const handleConnectionSubmit = async (data) => {
+  // Update connection form
+  connectionForm.value.host = data.host
+  connectionForm.value.port = data.port
+  
+  // Call original connect method
+  await handleConnect()
 }
 
 const handleDisconnect = async () => {
@@ -448,102 +443,228 @@ onMounted(async () => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: transparent;
+  position: relative;
+  overflow: hidden;
 }
 
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 0 30px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+  position: relative;
+  z-index: 100;
+
+  /* Glass gradient overlay */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, 
+      rgba(102, 126, 234, 0.3) 0%, 
+      rgba(118, 75, 162, 0.2) 50%, 
+      rgba(240, 147, 251, 0.3) 100%);
+    z-index: -1;
+  }
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 20px;
   }
 
   .app-title {
     margin: 0;
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 28px;
+    font-weight: 700;
     display: flex;
     align-items: center;
-    gap: 8px;
-
-    .logo {
-      font-size: 28px;
-    }
+    color: white;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    letter-spacing: -0.5px;
   }
 
   .subtitle {
     font-size: 14px;
-    opacity: 0.9;
+    opacity: 0.95;
+    color: white;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 20px;
+    backdrop-filter: blur(5px);
   }
 
   .header-right {
     display: flex;
     align-items: center;
     gap: 15px;
+
+    .el-tag {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      font-weight: 600;
+      padding: 8px 16px;
+      font-size: 13px;
+      
+      &.el-tag--success {
+        background: rgba(103, 194, 58, 0.3);
+        border-color: rgba(103, 194, 58, 0.5);
+      }
+      
+      &.el-tag--danger {
+        background: rgba(245, 87, 108, 0.3);
+        border-color: rgba(245, 87, 108, 0.5);
+      }
+    }
   }
 
   .server-info {
     font-size: 13px;
-    opacity: 0.9;
+    opacity: 0.95;
+    color: white;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 20px;
+  }
+
+  .el-button {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    font-weight: 600;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    &.el-button--primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      
+      &:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #f093fb 100%);
+        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+      }
+    }
   }
 }
 
 .app-container {
   flex: 1;
   overflow: hidden;
+  padding: 20px;
+  gap: 20px;
+  display: flex;
 }
 
 .sidebar {
-  background: white;
-  border-right: 1px solid #e4e7ed;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
   overflow: hidden;
+  margin-right: 0;
 
   .sidebar-tabs {
     height: 100%;
     
-    /* 标签等间距分布 */
     :deep(.el-tabs__header) {
-      padding-left: 15px;
-      padding-right: 15px;
-      margin-bottom: 0;
+      background: rgba(102, 126, 234, 0.08);
+      backdrop-filter: blur(10px);
+      margin: 0;
+      padding: 10px 15px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
     }
     
     :deep(.el-tabs__nav-wrap) {
-      padding-left: 0;
+      padding: 0;
     }
     
     :deep(.el-tabs__nav) {
       display: flex;
       width: 100%;
+      border: none;
     }
     
     :deep(.el-tabs__item) {
-      flex: 1;  /* 等分空间 */
-      text-align: center;  /* 文字居中 */
+      flex: 1;
+      text-align: center;
       padding: 0 10px;
+      color: #4a5568;
+      font-weight: 600;
+      border: none;
+      
+      &.is-active {
+        color: #667eea;
+        background: rgba(102, 126, 234, 0.15);
+        border-radius: 8px;
+      }
+      
+      &:hover {
+        color: #667eea;
+        background: rgba(102, 126, 234, 0.08);
+        border-radius: 8px;
+      }
+    }
+    
+    :deep(.el-tabs__active-bar) {
+      display: none;
     }
     
     :deep(.el-tabs__content) {
       padding: 0;
+      height: calc(100% - 60px);
+      overflow-y: auto;
     }
   }
 
   .tab-content {
-    padding: 15px;
+    padding: 20px;
 
     h3 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: #303133;
+      margin: 0 0 15px 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: #2d3748;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    
+    .el-descriptions {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      
+      :deep(.el-descriptions__label) {
+        color: #4a5568;
+        font-weight: 600;
+        background: rgba(102, 126, 234, 0.08);
+      }
+      
+      :deep(.el-descriptions__content) {
+        color: #2d3748;
+        background: rgba(255, 255, 255, 0.5);
+      }
     }
   }
 
@@ -551,41 +672,94 @@ onMounted(async () => {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 5px;
+    margin-top: 15px;
     
-    /* 确保按钮完全对齐 */
     .el-button {
       width: 100%;
-      margin: 0;  /* 移除默认margin */
-      padding-left: 12px;
-      padding-right: 12px;
-      justify-content: flex-start;  /* 文字左对齐 */
+      margin: 0;
+      padding: 12px;
+      justify-content: flex-start;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      color: #2d3748;
+      font-weight: 600;
+      border-radius: 12px;
       
       .el-icon {
         margin-right: 8px;
+      }
+      
+      &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 1);
+        transform: translateX(5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+      }
+      
+      &.el-button--primary {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
+        border: 1px solid rgba(102, 126, 234, 0.5);
+        color: white;
+        
+        &:hover {
+          background: linear-gradient(135deg, rgba(118, 75, 162, 1) 0%, rgba(240, 147, 251, 1) 100%);
+          box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+        }
+      }
+      
+      &.el-button--success {
+        background: linear-gradient(135deg, rgba(103, 194, 58, 0.9) 0%, rgba(64, 158, 255, 0.9) 100%);
+        border: 1px solid rgba(103, 194, 58, 0.5);
+        color: white;
+        
+        &:hover {
+          background: linear-gradient(135deg, rgba(103, 194, 58, 1) 0%, rgba(64, 158, 255, 1) 100%);
+        }
+      }
+      
+      &.el-button--danger {
+        background: linear-gradient(135deg, rgba(245, 87, 108, 0.9) 0%, rgba(230, 75, 86, 0.9) 100%);
+        border: 1px solid rgba(245, 87, 108, 0.5);
+        color: white;
+        
+        &:hover {
+          background: linear-gradient(135deg, rgba(245, 87, 108, 1) 0%, rgba(230, 75, 86, 1) 100%);
+        }
+      }
+      
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
     }
   }
 
   .history-item {
-    padding: 10px;
-    margin-bottom: 8px;
-    background: #f5f7fa;
-    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: rgba(102, 126, 234, 0.08);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
-      background: #e4e7ed;
+      background: rgba(102, 126, 234, 0.15);
+      transform: translateX(5px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+      border-color: rgba(102, 126, 234, 0.4);
     }
 
     .history-query {
       font-size: 12px;
-      font-family: 'Courier New', monospace;
-      margin-bottom: 5px;
+      font-family: 'Fira Code', 'Courier New', monospace;
+      margin-bottom: 8px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      color: #2d3748;
+      font-weight: 500;
     }
 
     .history-meta {
@@ -593,24 +767,75 @@ onMounted(async () => {
       justify-content: space-between;
       align-items: center;
       font-size: 11px;
-      color: #909399;
+      
+      .el-tag {
+        background: rgba(102, 126, 234, 0.15);
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        color: #667eea;
+      }
+      
+      .history-time {
+        color: #718096;
+        font-weight: 600;
+      }
     }
   }
 
   .example-description {
-    margin-bottom: 10px;
+    margin-bottom: 8px;  /* 从12px减少到8px */
     font-size: 13px;
-    color: #606266;
+    color: #4a5568;
+    line-height: 1.4;  /* 从1.5减少到1.4 */
   }
 
   .example-code {
-    margin-top: 10px;
-    padding: 10px;
-    background: #f5f7fa;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: 'Courier New', monospace;
+    margin-top: 8px;  /* 从12px减少到8px */
+    padding: 10px;  /* 从12px减少到10px */
+    background: rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 8px;
+    font-size: 11px;
+    font-family: 'Fira Code', 'Courier New', monospace;
     overflow-x: auto;
+    color: #2d3748;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    line-height: 1.5;  /* 从1.6减少到1.5 */
+  }
+  
+  :deep(.el-collapse) {
+    border: none;
+    background: transparent;
+    
+    .el-collapse-item {
+      margin-bottom: 6px;  /* 从10px减少到6px */
+      background: rgba(102, 126, 234, 0.08);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      overflow: hidden;
+      
+      .el-collapse-item__header {
+        background: rgba(102, 126, 234, 0.05);
+        color: #2d3748;
+        font-weight: 600;
+        padding: 10px 12px;  /* 从12px 15px减少到10px 12px */
+        border: none;
+        
+        &:hover {
+          background: rgba(102, 126, 234, 0.1);
+        }
+      }
+      
+      .el-collapse-item__wrap {
+        background: transparent;
+        border: none;
+      }
+      
+      .el-collapse-item__content {
+        padding: 12px;  /* 从15px减少到12px */
+        color: #4a5568;
+      }
+    }
   }
 }
 
@@ -618,27 +843,99 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
+  gap: 15px;
 }
 
 .query-section {
-  padding: 15px;
-  background: white;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  padding: 12px 20px 10px 20px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
 }
 
 .visualization-section {
   flex: 1;
   overflow: hidden;
+  display: flex;
+  gap: 20px;
 }
 
 .graph-container {
-  background: white;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
   padding: 0;
   overflow: hidden;
 }
 
 .results-panel {
-  background: white;
-  border-left: 1px solid #e4e7ed;
-  overflow: auto;
+  width: 400px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  overflow: hidden;  /* 改为hidden，避免外层滚动条 */
+  padding: 0;
+}
+
+/* Dialog Styles */
+:deep(.el-dialog) {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+  
+  .el-dialog__header {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    border-radius: 20px 20px 0 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  
+  .el-dialog__title {
+    font-weight: 700;
+    color: #2d3748;
+  }
+  
+  .el-dialog__body {
+    padding: 30px;
+  }
+}
+
+/* Form Styles */
+:deep(.el-form-item__label) {
+  color: #2d3748;
+  font-weight: 600;
+}
+
+:deep(.el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  box-shadow: none;
+  
+  &:hover, &.is-focus {
+    background: rgba(255, 255, 255, 0.7);
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  }
+}
+
+/* Tag Styles */
+:deep(.el-tag) {
+  border-radius: 20px;
+  font-weight: 600;
+  padding: 4px 12px;
 }
 </style>

@@ -14,8 +14,9 @@ public class BfsQueryBuilder {
     private final Vertex vertex;
 
     /**
-     * Create a new SecondOrderQueryBuilder instance
-     * @param g GraphTraversalSource for executing Gremlin queries
+     * Constructs a BfsQueryBuilder with the given traversal source and starting vertex ID.
+     * @param g the graph traversal source
+     * @param id the ID of the BFS starting vertex
      */
     public BfsQueryBuilder(GraphTraversalSource g, Object id) {
         this.g = g;
@@ -23,14 +24,18 @@ public class BfsQueryBuilder {
     }
 
     /**
-     * Static factory method to initialize second-order query builder
-     * @param g GraphTraversalSource for query execution
-     * @return New SecondOrderQueryBuilder instance
+     * Factory method for creating a SecondOrderQueryBuilder (placeholder).
+     * @param g the graph traversal source
+     * @return a new SecondOrderQueryBuilder instance
      */
     public static SecondOrderQueryBuilder secondOrder(GraphTraversalSource g) {
         return new SecondOrderQueryBuilder(g);
     }
 
+    /**
+     * Executes BFS via native RustJNI and returns all reachable vertices.
+     * @return a set of vertices reachable from the starting vertex
+     */
     public Set<Vertex> execute() {
         RustJNI jni = new RustJNI();
         CommunityGraph graph = (CommunityGraph) g.getGraph();
@@ -45,6 +50,10 @@ public class BfsQueryBuilder {
         return answer;
     }
 
+    /**
+     * Executes BFS and returns serialized results formatted for web visualization.
+     * @return serialized BFS results in a web-friendly map structure
+     */
     public Map<String, Object> executeForWeb() {
         Set<Vertex> answer = execute();
         Set<Set<Vertex>> result = new HashSet<>();

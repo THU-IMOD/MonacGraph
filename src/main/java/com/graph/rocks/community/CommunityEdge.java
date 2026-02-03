@@ -11,19 +11,19 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * LSM-Community-backed implementation of the TinkerPop Edge interface
+ * LSM-Community backed implementation of the TinkerPop Edge interface
  * Provides edge storage, serialization, and property management for LSM-Community based graph storage
  */
 @SuppressWarnings("all")
 public class CommunityEdge extends CommunityElement implements Edge {
 
-    // Prefix for edge keys in RocksDB storage
+    // Prefix for edge keys in LSM-Community storage
     public static final byte[] EDGE_PREFIX = "EDGE:".getBytes();
 
     private CommunityVertex outVertex;  // Outgoing vertex (source)
     private CommunityVertex inVertex;   // Incoming vertex (target)
     private Map<String, Property<?>> properties;  // Edge properties cache
-    private long edgeHandle;               // Native handle for RocksDB JNI operations
+    private long edgeHandle;               // Native handle for LSM-Community JNI operations
 
     /**
      * Get the native edge handle for LSM-Community JNI operations
@@ -372,7 +372,7 @@ public class CommunityEdge extends CommunityElement implements Edge {
 
     /**
      * Remove this edge from the graph
-     * Deletes edge data and associated indices from RocksDB
+     * Deletes edge data and associated indices from LSM-Community
      */
     @Override
     public void remove() {

@@ -1,14 +1,14 @@
 // Auto-generated initialization script for uploaded graph
-// Generated at: 2026-01-28T17:14:11.575122
+// Generated at: 2026-02-03T19:53:34.052187700
 
 // Initialize graph
-graph.reload('example')
+graph.reload('misaka')
 g = graph.traversal(SecondOrderTraversalSource.class)
 
 // Load vertex properties
-graph.loadVertexProperty('misakaVertexProperty.json')
+graph.loadVertexProperty('exampleVertexProperty.json')
 
 // Load edge properties
-graph.loadEdgeProperty('misakaEdgeProperty.csv')
+graph.loadEdgeProperty('exampleEdgeProperty.json')
 
-println "Uploaded graph 'example' initialized"
+println "Uploaded graph 'misaka' initialized"

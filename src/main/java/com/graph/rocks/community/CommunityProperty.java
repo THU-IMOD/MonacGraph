@@ -6,7 +6,7 @@ import org.apache.tinkerpop.gremlin.structure.util.StringFactory;
 
 /**
  * LSM-Community-backed implementation of the TinkerPop Property interface
- * Manages property storage and lifecycle for RocksVertex and RocksEdge elements
+ * Manages property storage and lifecycle for CommunityVertex and CommunityEdge elements
  *
  * @param <V> Type of the property value
  */
@@ -21,7 +21,7 @@ public class CommunityProperty<V> implements Property<V> {
     /**
      * Create a new property for a LSM-Community graph element
      *
-     * @param element Parent graph element (RocksVertex/RocksEdge)
+     * @param element Parent graph element (CommunityVertex/CommunityEdge)
      * @param key Unique property key (validated per TinkerPop specs)
      * @param value Property value (non-null unless explicitly allowed)
      * @param graph Parent graph instance with KV store access
@@ -37,7 +37,7 @@ public class CommunityProperty<V> implements Property<V> {
     /**
      * Get the parent graph element (vertex/edge) for this property
      *
-     * @return Parent RocksElement instance
+     * @return Parent CommunityElement instance
      */
     @Override
     public CommunityElement element() {

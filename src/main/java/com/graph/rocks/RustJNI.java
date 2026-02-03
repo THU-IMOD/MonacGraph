@@ -178,11 +178,43 @@ public class RustJNI {
      */
     public native void removeEdge(long graphHandle, long edgeHandle);
 
+    /**
+     * Perform BFS (Breadth-First Search) starting from the given vertex and return reachable vertices with distances
+     * Data format: If there are k reachable vertices from the current vertex, returns 2k values
+     * vertexHandle_1, distance_1, vertexHandle_2, distance_2, ..., vertexHandle_k, distance_k
+     * @param graphHandle Native database handle
+     * @param vertexHandle Native handle of the starting vertex for BFS
+     * @return Array containing pairs of (vertex handle, distance) for all reachable vertices
+     */
     public native long[] getBfsVertices(long graphHandle, long vertexHandle);
 
+    /**
+     * Get all Weakly Connected Components (WCC) in the graph
+     * Data format: If the graph has n vertices and k WCCs, returns 2n + 1 values
+     * k, vertexHandle_1, wcc_1, vertexHandle_2, wcc_2, ..., vertexHandle_n, wcc_n
+     * (wcc_i: Component ID of vertexHandle_i, ranging from 0 to k-1)
+     * @param graphHandle Native database handle
+     * @return Array containing component count followed by (vertex handle, component ID) pairs
+     */
     public native long[] getWCC(long graphHandle);
 
+    /**
+     * Get all Strongly Connected Components (SCC) in the graph
+     * Data format: Same as WCC. If the graph has n vertices and k SCCs, returns 2n + 1 values
+     * k, vertexHandle_1, scc_1, vertexHandle_2, scc_2, ..., vertexHandle_n, scc_n
+     * (scc_i: Component ID of vertexHandle_i, ranging from 0 to k-1)
+     * @param graphHandle Native database handle
+     * @return Array containing component count followed by (vertex handle, component ID) pairs
+     */
     public native long[] getSCC(long graphHandle);
 
+    /**
+     * Get all community detection results in the graph
+     * Data format: If the graph has n vertices and k communities, returns 2n + 1 values
+     * k, vertexHandle_1, community_1, vertexHandle_2, community_2, ..., vertexHandle_n, community_n
+     * (community_i: Community ID of vertexHandle_i, ranging from 0 to k-1)
+     * @param graphHandle Native database handle
+     * @return Array containing community count followed by (vertex handle, community ID) pairs
+     */
     public native long[] getCommunities(long graphHandle);
 }

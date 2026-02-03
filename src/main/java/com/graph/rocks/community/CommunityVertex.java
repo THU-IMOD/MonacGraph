@@ -360,7 +360,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
     }
 
     /**
-     * Get edge handles from RocksDB via JNI
+     * Get edge handles from LSM-Community via JNI
      * @param graphHandle Parent graph handle
      * @param vertexHandle Target vertex handle
      * @param direction Edge direction (0=OUT, 1=IN)
@@ -519,7 +519,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
     }
 
     /**
-     * Remove vertex from RocksDB via JNI
+     * Remove vertex from LSM-Community via JNI
      * @param graphHandle Parent graph handle
      * @param vertexHandle Target vertex handle
      */

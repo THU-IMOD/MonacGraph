@@ -1,9 +1,14 @@
-# Gremmunity
+# MonacGraph
 A graph database system based on the TinkerPop framework, supporting second-order logic.
 The storage backend is our community structure based graph storage system, i.e., LSM-Community.
 
+## Demo Video
+<video width="800" height="450" controls>
+  <source src="video/MonacGraph.mp4" type="video/mp4">
+  Your browser does not support HTML5 video. Please download the video to view: <a href="video/MonacGraph.mp4">MonacGraph.mp4</a>
+</video>
 
-## Gremmunity Build & Run Guide
+## MonacGraph Build & Run Guide
 
 This guide explains how to compile the native LSM storage engine, build the Java application, and run the server/clients.
 
@@ -11,19 +16,22 @@ This guide explains how to compile the native LSM storage engine, build the Java
 
 First, compile the Rust project and copy the native library to the Java resource directory.
 
-*Note: This example assumes a macOS environment (`.dylib`). For Windows/Linux, adjust the file extension and destination folder accordingly.*
-
 ```bash
-# 1. Enter the rust sub-project
+# 1. Enter the Rust sub-project directory
 cd lsm-community
 
-# 2. Compile the release version
+# 2. Compile the optimized release version
 cargo build -p lsm-community-java --release
 
-# 3. Copy the native library to the Java resources folder
-cp ./target/release/liblsm_community_java.dylib ../src/main/resources/storage/macos
+# 3. Copy the native library to Java resources (run ONLY the command for your OS)
+# Windows
+cp ./target/release/lsm_community_java.dll ../src/main/resources/storage/windows/
+# Linux
+cp ./target/release/liblsm_community_java.so ../src/main/resources/storage/linux/
+# macOS
+cp ./target/release/liblsm_community_java.dylib ../src/main/resources/storage/macos/
 
-# 4. Return to the project root
+# 4. Return to the project root directory
 cd ..
 ```
 
@@ -41,17 +49,41 @@ Start the Gremlin Server. Ensure the server is fully started (wait for the port 
 java -cp target/Gremmunity-1.0-SNAPSHOT.jar com.graph.rocks.example.MonacGraphServer
 ```
 
-### 4. Running Clients
-Open a new terminal window to run the example clients.
+### 4. Running Web Client
+Open a new terminal window to run the web-based visualization client.
 
-Run the Standard Client:
+**Prerequisites**: Ensure Node.js (v14+) and npm are installed on your system.
+
+Run the Web Client:
 
 ```bash
-java -cp target/Gremmunity-1.0-SNAPSHOT.jar com.graph.rocks.example.MonacGraphClient
+# 1. Navigate to the demo (web client) subdirectory
+cd demo
 
-#or
+# 2. Install all required Node.js dependencies for the web client
+npm install
 
-java -cp target/Gremmunity-1.0-SNAPSHOT.jar com.graph.rocks.example.BatchImportClient
+# 3. Start the development server (runs on http://localhost:5173 by default)
+npm run dev
+```
+
+**Access the Web Interface**:
+After the server starts successfully, you will see the local access URL in the terminal: `http://localhost:5173/`.
+
+**Method 1 (Click the Link)**:
+Hold `Ctrl` (Windows/Linux) or `Cmd` (macOS) and click the URL directly in the terminal to open it in your default browser.
+
+**Method 2 (Command Line Instruction)**:
+Run the following command in a new terminal to open the URL automatically:
+
+```bash
+# Open the web interface automatically (run ONLY the command for your OS)
+# Windows (PowerShell)
+start http://localhost:5173/
+# macOS
+open http://localhost:5173/
+# Linux
+xdg-open http://localhost:5173/
 ```
 
 

@@ -379,62 +379,114 @@ class GremlinService {
    *   {"@type": "g:Map", "@value": ["totalCount", X]}
    * ]
    */
+  /**
+   * 解析 GraphSON v3 格式
+   */
+  parseGraphSON(value) {
+    // null/undefined 直接返回
+    if (value === null || value === undefined) {
+      return value
+    }
+    
+    // 处理 GraphSON 类型包装 {@type: "g:Map", @value: [...]}
+    if (value['@type'] && value['@value'] !== undefined) {
+      const type = value['@type']
+      const val = value['@value']
+      
+      switch (type) {
+        case 'g:Map':
+          // g:Map 格式: @value 是 [key1, val1, key2, val2, ...] 数组
+          return this.parseGraphSONMap(val)
+        
+        case 'g:List':
+          // g:List 格式: @value 是普通数组
+          return val.map(item => this.parseGraphSON(item))
+        
+        case 'g:Set':
+          // g:Set 格式: @value 是数组
+          return val.map(item => this.parseGraphSON(item))
+        
+        case 'g:Int32':
+        case 'g:Int64':
+        case 'g:Double':
+        case 'g:Float':
+          // 数字类型直接返回值
+          return val
+        
+        case 'g:UUID':
+          // UUID 作为字符串
+          return String(val)
+        
+        default:
+          // 其他类型返回值
+          return val
+      }
+    }
+    
+    // 普通对象，递归处理所有属性
+    if (typeof value === 'object' && value !== null) {
+      if (Array.isArray(value)) {
+        return value.map(item => this.parseGraphSON(item))
+      } else {
+        const obj = {}
+        for (const key in value) {
+          obj[key] = this.parseGraphSON(value[key])
+        }
+        return obj
+      }
+    }
+    
+    // 基本类型直接返回
+    return value
+  }
+
+  /**
+   * 解析 GraphSON Map 格式
+   */
+  parseGraphSONMap(kvArray) {
+    const obj = {}
+    
+    // 每次取两个元素：key 和 value
+    for (let i = 0; i < kvArray.length; i += 2) {
+      const key = kvArray[i]
+      const value = kvArray[i + 1]
+      obj[key] = this.parseGraphSON(value)
+    }
+    
+    return obj
+  }
+
   tryParseAsVsetResult(data) {
     try {
-      // 解开 GraphSON List 包装
-      const unwrapped = this.unwrapGraphSONList(data)
+      console.log('🔍 Parsing Vset result, raw data:', data)
       
-      if (!unwrapped || !Array.isArray(unwrapped) || unwrapped.length === 0) {
-        return null
-      }
-
-      // 合并所有 Map 对象
-      const obj = {}
+      // 使用新的 GraphSON 解析器
+      const parsed = this.parseGraphSON(data)
       
-      for (const item of unwrapped) {
-        // 检查是否是 Map 格式
-        if (!item || item['@type'] !== 'g:Map') {
-          continue
-        }
-
-        const mapValue = item['@value']
-        if (!Array.isArray(mapValue)) {
-          continue
-        }
-
-        // 解析 Map 中的键值对并合并到 obj
-        for (let i = 0; i < mapValue.length; i += 2) {
-          const key = this.extractGraphSONValue(mapValue[i])
-          const value = this.extractGraphSONValue(mapValue[i + 1])
-          obj[key] = value
+      console.log('✓ GraphSON parsed:', parsed)
+      
+      // 检查是否是数组（查询可能返回数组）
+      let obj = parsed
+      if (Array.isArray(parsed)) {
+        obj = {}
+        for (const item of parsed) {
+          Object.assign(obj, item)  // ← 合并所有 Map
         }
       }
-
+      
       // 检查是否是 VsetResult
-      if (obj.type !== 'VsetResult') {
+      if (!obj || obj.type !== 'VsetResult') {
+        console.log('Not a Vset result (type:', obj?.type, ')')
         return null
       }
 
       console.log('✓ Detected Vset result format')
-      console.log('Raw Vset data:', obj)
-
-      // 解析 subsets
-      const subsets = []
-      if (Array.isArray(obj.subsets)) {
-        obj.subsets.forEach(subset => {
-          if (subset && typeof subset === 'object') {
-            // 确保格式正确
-            const parsed = {
-              vertices: subset.vertices || [],
-              size: subset.size || 0,
-              properties: subset.properties || {}
-            }
-            subsets.push(parsed)
-          }
-        })
-      }
-
-      console.log(`✓ Parsed ${subsets.length} subsets`)
+      
+      // subsets 应该已经被正确解析了
+      const subsets = obj.subsets || []
+      
+      console.log(`✓ Found ${subsets.length} subsets`)
+      console.log('Subsets data:', subsets)
 
       return {
         type: 'VsetResult',
@@ -442,7 +494,8 @@ class GremlinService {
         totalCount: obj.totalCount || subsets.length
       }
     } catch (error) {
-      console.log('Could not parse as Vset result:', error.message)
+      console.error('❌ Error parsing Vset result:', error)
+      console.error('Stack:', error.stack)
       return null
     }
   }

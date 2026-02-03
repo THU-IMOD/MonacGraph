@@ -61,7 +61,7 @@ public class MonacGraphServer {
         startUploadServer();
 
         logger.info("=".repeat(60));
-        logger.info("✓ MonacGraph Server Started!");
+        logger.info("  MonacGraph Server Started!");
         logger.info("  Gremlin API: ws://localhost:8182/gremlin");
         logger.info("  Upload API:  http://localhost:{}/api/graph/upload", UPLOAD_PORT);
         logger.info("  Health Check: http://localhost:{}/api/health", UPLOAD_PORT);
@@ -89,7 +89,7 @@ public class MonacGraphServer {
         gremlinServer = new GremlinServer(settings);
         gremlinServer.start().join();
 
-        logger.info("✓ Gremlin Server started on port {}", settings.port);
+        logger.info("  Gremlin Server started on port {}", settings.port);
 
         // Initialize Gremlin Client to communicate with the server
         initializeGremlinClient(settings.host, settings.port);
@@ -126,7 +126,7 @@ public class MonacGraphServer {
         context.addServlet(uploadHolder, "/api/graph/upload");
 
         uploadServer.start();
-        logger.info("✓ Upload Server started on port {}", UPLOAD_PORT);
+        logger.info("  Upload Server started on port {}", UPLOAD_PORT);
     }
 
     /**
@@ -144,7 +144,7 @@ public class MonacGraphServer {
 
             gremlinClient = cluster.connect();
 
-            logger.info("✓ Gremlin Client initialized for graph activation");
+            logger.info("  Gremlin Client initialized for graph activation");
         } catch (Exception e) {
             logger.error("Failed to initialize Gremlin Client", e);
         }
@@ -173,7 +173,7 @@ public class MonacGraphServer {
             String result = results.all().get().toString();
 
             logger.info("Close result: {}", result);
-            logger.info("✓ Current graph closed, file locks released");
+            logger.info("  Current graph closed, file locks released");
 
         } catch (Exception e) {
             logger.warn("Failed to close current graph (this is OK if no graph was open): {}", e.getMessage());
@@ -218,9 +218,9 @@ public class MonacGraphServer {
             // Wait for completion
             results.all().get();
 
-            logger.info("✓ Graph '{}' activated in global context", graphName);
-            logger.info("✓ Variables 'graph' and 'g' are now available globally");
-            logger.info("✓ Previous graph (if any) was closed to release the lock");
+            logger.info("  Graph '{}' activated in global context", graphName);
+            logger.info("  Variables 'graph' and 'g' are now available globally");
+            logger.info("  Previous graph (if any) was closed to release the lock");
 
         } catch (Exception e) {
             logger.error("Failed to activate graph in global context", e);
@@ -305,7 +305,7 @@ public class MonacGraphServer {
                         }
                         Path graphFilePath = dataPath.resolve(graphName + ".graph");
                         saveFile(graphFilePart, graphFilePath);
-                        logger.info("✓ Saved vertex properties: {}", graphFilePath);
+                        logger.info("  Saved vertex properties: {}", graphFilePath);
                     }
                 }
 
@@ -321,7 +321,7 @@ public class MonacGraphServer {
                         }
                         Path vertexFilePath = dataPath.resolve(vertexFileName);
                         saveFile(vertexFilePart, vertexFilePath);
-                        logger.info("✓ Saved vertex properties: {}", vertexFilePath);
+                        logger.info("  Saved vertex properties: {}", vertexFilePath);
                     }
                 }
 
@@ -337,7 +337,7 @@ public class MonacGraphServer {
                         }
                         Path edgeFilePath = dataPath.resolve(edgeFileName);
                         saveFile(edgeFilePart, edgeFilePath);
-                        logger.info("✓ Saved edge properties: {}", edgeFilePath);
+                        logger.info("  Saved edge properties: {}", edgeFilePath);
                     }
                 }
 
@@ -357,7 +357,7 @@ public class MonacGraphServer {
                 resp.setStatus(HttpServletResponse.SC_OK);
                 resp.getWriter().write(jsonResponse);
 
-                logger.info("✓ Upload completed successfully for graph: {}", graphName);
+                logger.info("  Upload completed successfully for graph: {}", graphName);
 
                 // Update initialization script (for server restart)
                 updateInitScript(graphName, vertexFileName, edgeFileName);
@@ -398,7 +398,7 @@ public class MonacGraphServer {
                 // Step 1: Save uploaded content to temporary file
                 try (InputStream input = filePart.getInputStream()) {
                     Files.copy(input, tempFile, StandardCopyOption.REPLACE_EXISTING);
-                    logger.debug("✓ Saved to temporary file: {}", tempFile);
+                    logger.debug("  Saved to temporary file: {}", tempFile);
                 }
                 // InputStream is now closed
 
@@ -419,7 +419,7 @@ public class MonacGraphServer {
 
                         if (filesAreIdentical(tempFile, targetPath)) {
                             // Files are identical, no need to update
-                            logger.info("✓ File already up-to-date, skipping update: {}", targetPath);
+                            logger.info("  File already up-to-date, skipping update: {}", targetPath);
                             Files.delete(tempFile); // Clean up temp file
                             return; // Success - no update needed
                         } else {
@@ -429,13 +429,13 @@ public class MonacGraphServer {
                                     "Please close the graph and try again: " + targetPath);
                         }
                     }
-                    logger.debug("✓ Deleted existing target file: {}", targetPath);
+                    logger.debug("  Deleted existing target file: {}", targetPath);
                 }
 
                 // Step 4: Rename temporary file to target file
-                logger.debug("✓ Renaming {} to {}", tempFile, targetPath);
+                logger.debug("  Renaming {} to {}", tempFile, targetPath);
                 Files.move(tempFile, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                logger.info("✓ File saved successfully: {}", targetPath);
+                logger.info("  File saved successfully: {}", targetPath);
 
             } catch (IOException e) {
                 // Clean up temporary file
@@ -615,7 +615,7 @@ public class MonacGraphServer {
                 script.append("println \"Uploaded graph '").append(graphName).append("' initialized\"\n");
 
                 Files.write(initScript, script.toString().getBytes());
-                logger.info("✓ Updated initialization script: {}", initScript);
+                logger.info("  Updated initialization script: {}", initScript);
 
             } catch (IOException e) {
                 logger.error("Failed to update initialization script", e);
@@ -661,7 +661,7 @@ public class MonacGraphServer {
         if (gremlinClient != null) {
             try {
                 gremlinClient.close();
-                logger.info("✓ Gremlin Client closed");
+                logger.info("  Gremlin Client closed");
             } catch (Exception e) {
                 logger.error("Error closing Gremlin client", e);
             }
@@ -670,7 +670,7 @@ public class MonacGraphServer {
         if (cluster != null) {
             try {
                 cluster.close();
-                logger.info("✓ Gremlin Cluster closed");
+                logger.info("  Gremlin Cluster closed");
             } catch (Exception e) {
                 logger.error("Error closing Gremlin cluster", e);
             }
@@ -680,7 +680,7 @@ public class MonacGraphServer {
         if (uploadServer != null) {
             try {
                 uploadServer.stop();
-                logger.info("✓ Upload Server stopped");
+                logger.info("  Upload Server stopped");
             } catch (Exception e) {
                 logger.error("Error stopping upload server", e);
             }
@@ -689,7 +689,7 @@ public class MonacGraphServer {
         // Stop Gremlin server
         if (gremlinServer != null) {
             gremlinServer.stop().join();
-            logger.info("✓ Gremlin Server stopped");
+            logger.info("  Gremlin Server stopped");
         }
 
         logger.info("MonacGraph Server stopped");

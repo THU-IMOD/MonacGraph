@@ -185,6 +185,13 @@ public class CommunityGraph implements Graph, Serializable {
         return new CommunityGraph(dbName);
     }
 
+    /**
+     * Reloads the graph database with the specified name
+     * Closes the existing connection (if active), recreates the data directory and graph file if needed,
+     * and initializes a new native database handle
+     *
+     * @param dbName Name of the graph database to reload
+     */
     public void reload(final String dbName) {
         if (graphHandle != -1) {
             close();
