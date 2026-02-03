@@ -366,6 +366,6 @@ const handleConnect = () => {
 
   .connection-dialog {
     transform: scale(0.9) translateY(-20px);
-  }
+  } 
 }
 </style>
