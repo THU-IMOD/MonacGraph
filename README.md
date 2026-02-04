@@ -51,7 +51,7 @@ java -cp target/Gremmunity-1.0-SNAPSHOT.jar com.graph.rocks.example.MonacGraphSe
 ### 4. Running Web Client
 Open a new terminal window to run the web-based visualization client.
 
-**Prerequisites**: Ensure Node.js (v14+) and npm are installed on your system.
+**Prerequisites**: Ensure Node.js (v16+) and npm are installed on your system.
 
 Run the Web Client:
 
