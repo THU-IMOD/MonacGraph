@@ -24,10 +24,13 @@ cargo build -p lsm-community-java --release
 
 # 3. Copy the native library to Java resources (run ONLY the command for your OS)
 # Windows
+mkdir -p ../src/main/resources/storage/windows/
 cp ./target/release/lsm_community_java.dll ../src/main/resources/storage/windows/
 # Linux
+mkdir -p ../src/main/resources/storage/linux/
 cp ./target/release/liblsm_community_java.so ../src/main/resources/storage/linux/
 # macOS
+mkdir -p ../src/main/resources/storage/macos/
 cp ./target/release/liblsm_community_java.dylib ../src/main/resources/storage/macos/
 
 # 4. Return to the project root directory
@@ -79,10 +82,10 @@ Run the following command in a new terminal to open the URL automatically:
 # Open the web interface automatically (run ONLY the command for your OS)
 # Windows (PowerShell)
 start http://localhost:5173/
-# macOS
-open http://localhost:5173/
 # Linux
 xdg-open http://localhost:5173/
+# macOS
+open http://localhost:5173/
 ```
 
 
