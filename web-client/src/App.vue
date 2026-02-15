@@ -7,7 +7,7 @@
           MonacGraph
         </h1>
         <span class="subtitle">A Monadic Second-Order Logic Extended Graph
-Database with Community-Aware Storage</span>
+Database System with Community-Aware Storage</span>
       </div>
       
       <div class="header-right">

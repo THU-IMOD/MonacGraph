@@ -133,7 +133,7 @@ public class CommunityEdge extends CommunityElement implements Edge {
             this.id = edgeHandle;
             this.outVertex = new CommunityVertex(graph, (edgeHandle >>> 32) & 0xFFFFFFFFL);
             this.inVertex = new CommunityVertex(graph, edgeHandle & 0xFFFFFFFFL);
-            this.properties = null;
+            this.properties = new HashMap<>();
             return;
         }
 

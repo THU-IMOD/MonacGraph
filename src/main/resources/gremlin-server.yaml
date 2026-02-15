@@ -67,3 +67,4 @@ maxContentLength: 10485760
 resultIterationBatchSize: 64
 writeBufferLowWaterMark: 32768
 writeBufferHighWaterMark: 65536
+evaluationTimeout: 1200000

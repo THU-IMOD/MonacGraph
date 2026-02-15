@@ -219,13 +219,13 @@ class GremlinService {
       // 获取所有顶点（使用 elementMap 避免序列化问题）
       const verticesQuery = 
         "g = graph.traversal(SecondOrderTraversalSource.class); " +
-        "g.V().limit(100).elementMap().toList()"
+        "g.V().elementMap().toList()"
       const verticesResult = await this.executeQuery(verticesQuery)
       
       // 获取所有边
       const edgesQuery = 
         "g = graph.traversal(SecondOrderTraversalSource.class); " +
-        "g.E().limit(100).project('id', 'label', 'source', 'target')" +
+        "g.E().project('id', 'label', 'source', 'target')" +
         ".by(T.id)" +
         ".by(T.label)" +
         ".by(outV().id())" +
