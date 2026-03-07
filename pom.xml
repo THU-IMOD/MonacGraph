@@ -222,7 +222,7 @@
                     <!-- 指定主类（请替换为你的实际主类全路径） -->
                     <archive>
                         <manifest>
-                            <mainClass>com.graph.rocks.Main</mainClass>
+                            <mainClass>db.monacgraph.MainTest</mainClass>
                         </manifest>
                     </archive>
                     <!-- 输出文件名格式 -->

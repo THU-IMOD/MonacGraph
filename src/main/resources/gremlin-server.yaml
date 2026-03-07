@@ -19,9 +19,9 @@ scriptEngines: {
         classImports: [
           java.lang.Math,
           org.apache.tinkerpop.gremlin.structure.T,
-          com.graph.rocks.community.CommunityGraph,
-          com.graph.rocks.so.SecondOrderTraversalSource,
-          com.graph.rocks.serialize.VsetResultSerializer
+          db.monacgraph.community.CommunityGraph,
+          db.monacgraph.so.SecondOrderTraversalSource,
+          db.monacgraph.serialize.VsetResultSerializer
         ],
         methodImports: [java.lang.Math#*]
       },

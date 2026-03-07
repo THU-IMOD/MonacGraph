@@ -37,21 +37,50 @@ cp ./target/release/liblsm_community_java.dylib ../src/main/resources/storage/ma
 cd ..
 ```
 
-### 2. Build Java Application
+### 2. Build Subgraph Matching Engine (C++, Optional)
+
+> This step is only required if you need the **second-order logic subgraph matching** feature
+> (`g.Subgraph().addV(...).addE(...).forall(...).filter(...).execute()`).
+> Skip this step if you only use community-based or vertex subset queries.
+
+The subgraph matching engine is located in the `subgraph/` directory.
+Make sure CMake (3.16+), a C++17 compiler, and your JDK are installed before proceeding.
+
+```bash
+# 1. Enter the subgraph sub-project directory
+cd subgraph
+
+# 2. Configure and build the shared library
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+
+# 3. Copy the native library to Java resources (run ONLY the command for your OS)
+# Windows
+cp build/Release/subgraph_matching.dll ../src/main/resources/storage/windows/
+# Linux
+cp build/libsubgraph_matching.so ../src/main/resources/storage/linux/
+# macOS
+cp build/libsubgraph_matching.dylib ../src/main/resources/storage/macos/
+
+# 4. Return to the project root directory
+cd ..
+```
+
+### 3. Build Java Application
 Compile the Java project and package it into a JAR file.
 
 ```bash
 mvn clean package
 ```
 
-### 3. Running the Server
+### 4. Running the Server
 Start the Gremlin Server. Ensure the server is fully started (wait for the port binding log) before running any clients.
 
 ```bash
-java -cp target/Gremmunity-1.0-SNAPSHOT.jar com.graph.rocks.example.MonacGraphServer
+java -cp target/Gremmunity-1.0-SNAPSHOT.jar db.monacgraph.app.MonacGraphServer
 ```
 
-### 4. Running Web Client
+### 5. Running Web Client
 Open a new terminal window to run the web-based visualization client.
 
 **Prerequisites**: Ensure Node.js (v16+) and npm are installed on your system.
@@ -89,5 +118,5 @@ open http://localhost:5173/
 ```
 
 
-### 5. Custom Usage
+### 6. Custom Usage
 You can also build your own client applications. Since this project is compatible with Apache TinkerPop, you can use the Gremlin query language to perform graph traversals and queries against the server.

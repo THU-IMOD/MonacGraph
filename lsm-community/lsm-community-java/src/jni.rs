@@ -54,7 +54,7 @@ fn jbytearray_to_vec(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_openDB(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_openDB(
     mut env: JNIEnv,
     _class: JObject,
     db_name: JString,
@@ -95,7 +95,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_openDB(
 use jni::objects::JByteArray;
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getVertexHandleById(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getVertexHandleById(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -156,7 +156,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getVertexHandleById(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getAllVertices(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getAllVertices(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -201,7 +201,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getAllVertices(
 
 #[unsafe(no_mangle)]
 #[allow(unused_variables)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getEdgeHandleById(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getEdgeHandleById(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -263,7 +263,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getEdgeHandleById(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getAllEdges(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getAllEdges(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -312,7 +312,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getAllEdges(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_closeDB(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_closeDB(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -343,7 +343,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_closeDB(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_createVertex(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_createVertex(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -438,7 +438,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_createVertex(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getDataFromVertexHandle(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getDataFromVertexHandle(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -482,7 +482,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getDataFromVertexHandle(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_putVertexData(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_putVertexData(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -543,7 +543,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_putVertexData(
 
 #[unsafe(no_mangle)]
 #[allow(unused_variables)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_removeVertex(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_removeVertex(
     env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -552,7 +552,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_removeVertex(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getEdgeHandleByVertex(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getEdgeHandleByVertex(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -639,7 +639,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getEdgeHandleByVertex(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_createEdge(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_createEdge(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -694,7 +694,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_createEdge(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getDataFromEdgeHandle(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getDataFromEdgeHandle(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -741,7 +741,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getDataFromEdgeHandle(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_putEdgeData(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_putEdgeData(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -804,7 +804,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_putEdgeData(
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_removeEdge(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_removeEdge(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -844,7 +844,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_removeEdge(
 /// Array format: [vh1, dist1, vh2, dist2, ..., vhk, distk]
 /// where vhi is the i-th reachable vertex handle and disti is its distance from start
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getBfsVertices(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getBfsVertices(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -913,7 +913,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getBfsVertices(
 /// where k is the number of components, vhi is vertex handle i,
 /// and wcci is the component ID (0 to k-1) for vertex i
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getWCC(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getWCC(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -992,7 +992,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getWCC(
 /// where k is the number of components, vhi is vertex handle i,
 /// and scci is the component ID (0 to k-1) for vertex i
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getSCC(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getSCC(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -1057,7 +1057,7 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getSCC(
 /// - ci_size is the size of the i-th community
 /// - vi_1, vi_2, ..., vi_ci are the vertex IDs belonging to the i-th community
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_graph_rocks_RustJNI_getCommunities(
+pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getCommunities(
     mut env: JNIEnv,
     _class: JObject,
     graph_handle: jlong,
@@ -1116,3 +1116,4 @@ pub extern "system" fn Java_com_graph_rocks_RustJNI_getCommunities(
         }
     }
 }
+
