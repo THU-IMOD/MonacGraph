@@ -4,6 +4,7 @@ import db.monacgraph.community.CommunityGraph;
 import db.monacgraph.so.SecondOrderTraversalSource;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 
+import java.util.List;
 import java.util.Set;
 
 public class SubgraphTest {
@@ -37,13 +38,16 @@ public class SubgraphTest {
             // have similar ages (diff < 4) or a large combined age (>= 60);
             // triangles that violate this for any pair are filtered out.
             //
-            // Expected matches (4 total):
+            // Expected matches (4 unique triangles × 3! = 24 total):
+            // Each triangle appears 6 times, once for each injective mapping of
+            // the 3 query vertices (0, 1, 2) onto the 3 matched data vertices.
+            //
+            // Unique triangles:
             //   {Alice(30), Charlie(28), David(35)}
             //   {Bob(25),   Charlie(28), David(35)}
             //   {Henry(27), Irene(26),   Jack(29)}
             //   {Henry(27), Jack(29),    Karen(33)}
-            //
-            Set<Set<Vertex>> results = g.Subgraph()
+            List<List<Vertex>> results = g.Subgraph()
                     .addV(2, "person")
                     .addV(1, "person")
                     .addV(0, "person")
@@ -62,7 +66,7 @@ public class SubgraphTest {
             System.out.println("Total: " + results.size());
 
             int idx = 1;
-            for (Set<Vertex> match : results) {
+            for (List<Vertex> match : results) {
                 System.out.print("Match " + idx++ + ": ");
                 for (Vertex v : match) {
                     System.out.printf("%s(age=%s) ", v.value("name"), v.value("age"));
@@ -71,7 +75,7 @@ public class SubgraphTest {
             }
 
             // 4. Assertion
-            assert results.size() == 4 : "Expected 4 matches, got " + results.size();
+            assert results.size() == 24 : "Expected 24 matches, got " + results.size();
             System.out.println("\nAll assertions passed.");
 
             graph.close();

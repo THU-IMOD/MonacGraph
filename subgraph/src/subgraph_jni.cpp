@@ -1,8 +1,8 @@
-#include <jni.h>
 #include "graph.h"
 #include "filter.h"
-#include "order.h"
 #include "enumerate.h"
+#include <jni.h>
+#include <iostream>
 
 extern "C" {
 
@@ -61,23 +61,23 @@ Java_db_monacgraph_jni_SubgraphJNI_nativeRunSubgraphMatch(
         return static_cast<bool>(result);
     };
 
-    /* ── 4. Standard subgraph pipeline ───────────────────────── */
+    /* ── 4. Filter candidates ────────────────────────────────────── */
     CandidateSet candidates;
     filterByGQL(query, data, candidates);
-
-    Order order;
-    orderByRI(query, order);
 
     /* ── 5. Backtrack with result collection ─────────────────── */
     std::vector<std::vector<VertexID>> matchResults;
 
-    EnumContext ctx(data, query, order, candidates, quantifiers);
-    ctx.phi     = phi;
-    ctx.onMatch = [&](const std::vector<VertexID>& matched) {
-        matchResults.push_back(matched);
+    EnumContext ctx(data, query, candidates, quantifiers, 1000);
+    ctx.onMatch = [&](const std::vector<VertexID>& matched,
+                  const std::vector<VertexID>& dynOrder) {
+        std::vector<VertexID> canonical(ctx.qn);
+        for (uint32_t d = 0; d < ctx.qn; ++d)
+            canonical[dynOrder[d]] = matched[d];
+        matchResults.push_back(canonical);
     };
 
-    backtrack(ctx, 0);
+    backtrack(ctx, 0, phi);
     env->DeleteGlobalRef(callbackRef);
 
     /* ── 6. Encode results as flat jlong[] ───────────────────── *

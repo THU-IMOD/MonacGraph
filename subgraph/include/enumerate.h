@@ -1,55 +1,42 @@
 #pragma once
 #include "graph.h"
 #include "filter.h"
-#include "order.h"
 #include "decision_tree.h"
 
 /**
- * Enumerate subgraph isomorphisms via backtracking.
+ * Dynamic fail-first subgraph enumeration with adaptive probe ordering.
  *
- * Optimizations
- * =============
+ * Adaptive probe ordering (per-depth)
+ * =====================================
+ * Each probe at depth d does two expensive operations:
+ *   (A) narrowCands  — two-pointer intersections, O(|cands| + deg) per neighbour
+ *   (B) update_for_depth — DT traversal, O(depth²) work
  *
- * 1. LICM multi-level intersection cache
- *    ─────────────────────────────────────────────────────────────────
- *    For depth d with backward neighbors [p0, p1, p2, ...] (p0<p1<p2):
+ * The order matters because whichever runs first can prune the probe before
+ * the other runs.  The optimal order depends on two rates and two costs:
  *
- *      licmCache[d][0] = C(u_d) ∩ N(v_p0)            ← set when p0 is mapped
- *      licmCache[d][1] = licmCache[d][0] ∩ N(v_p1)   ← set when p1 is mapped
- *      licmCache[d][2] = licmCache[d][1] ∩ N(v_p2)   ← set when p2 is mapped
+ *   f     = fwd_prune_rate  = fwdPruned / probed
+ *   d'    = dt_prune_rate   = dtPruned  / (probed - fwdPruned)
+ *   C_n   = avg narrow elements per probe  = narrowWork / probed
+ *   C_d   = DT cost in equivalent narrow-element units  (constant DT_COST_ELEMS)
  *
- *    When entering depth d: localCands = licmCache[d][numBN-1].
- *    Zero intersection work at depth d — everything is pre-computed.
+ * Expected cost per probe:
+ *   Order A (narrow → DT):  E_A = C_n + (1-f)  * C_d
+ *   Order B (DT → narrow):  E_B = C_d + (1-d') * C_n
  *
- *    This is the generalization of CSE:
- *      CSE  = LICM level 0 only  (cache first BN, recompute rest at depth d)
- *      LICM = all levels cached  (nothing left to compute at depth d)
+ * B is cheaper when:  C_d * f  <  C_n * d'
+ * i.e. DT is cheap AND its prune rate d' is high relative to fwd's rate f.
  *
- *    bnTargets[k] = list of (depth d, bn_index i) where
- *    backwardNbrs[d][i] == k. When position k is mapped to vertex v,
- *    updateLICM(k, v) recomputes all affected cache entries.
- *
- * 2. Forward neighbor pruning (unified with LICM)
- *    ─────────────────────────────────────────────────────────────────
- *    updateLICM(k, v) returns false as soon as any licmCacheSize[d][i]
- *    becomes 0. This means depth d is provably unsatisfiable under the
- *    current partial mapping → prune v before recursing.
- *    No separate fwdCSE / fwdCheck structures needed.
- *
- * 3. Failing Set pruning (FP:GuP)
- *    ─────────────────────────────────────────────────────────────────
- *    failPos[d] = shallowest ancestor position blocking depth d.
- *    childFail < depth → skip remaining candidates, propagate up.
+ * Every ADAPT_INTERVAL probes at depth d, we recompute this inequality and
+ * flip dtFirst[d] accordingly.  A warmup guard (ADAPT_WARMUP probes) prevents
+ * premature decisions before enough data is collected.
  */
-
-/* ------------------------------------------------------------------ */
 
 using Quantifiers = std::vector<Quantifier>;
 
-/** Two-pointer sorted-array intersection; same as intersect() in order.h. */
 inline uint32_t twoPointerIntersect(const VertexID* a, uint32_t na,
                                      const VertexID* b, uint32_t nb,
-                                     VertexID* out)
+                                     VertexID*       out)
 {
     uint32_t i = 0, j = 0, cnt = 0;
     while (i < na && j < nb) {
@@ -60,322 +47,447 @@ inline uint32_t twoPointerIntersect(const VertexID* a, uint32_t na,
     return cnt;
 }
 
-/** Identifies the source position and BN slot of a backward-neighbor edge. */
-struct BNTarget {
-    uint32_t depth;
-    uint32_t bnIdx;   /* backwardNbrs[depth][bnIdx] == k */
-};
+/* ── adaptive ordering constants ───────────────────────────────────── *
+ * DT_COST_ELEMS  — estimated DT cost expressed in "equivalent number   *
+ *   of narrow elements scanned".  This is the single tuning knob:      *
+ *   higher = DT is considered more expensive → bias toward narrow-first *
+ *   lower  = DT is considered cheap → bias toward DT-first             *
+ *   Default 400 ≈ ~200 ns, roughly 1 DT call on a 16-vertex query.    *
+ *                                                                       *
+ * ADAPT_INTERVAL — re-evaluate ordering every N probes at each depth.  *
+ * ADAPT_WARMUP   — minimum probes before the first evaluation.         */
+static constexpr uint32_t DT_COST_ELEMS  = 400;
+static constexpr uint32_t ADAPT_INTERVAL = 2000;
+static constexpr uint32_t ADAPT_WARMUP   = 500;
 
-/**
- * EnumContext — all mutable state shared across the recursive backtrack().
- *
- * Keeping everything in one struct avoids passing many arguments and
- * makes the undo / rollback logic straightforward.
- */
 struct EnumContext {
     const Graph&        data;
-    const Order&        order;
+    const QueryGraph&   query;
     const CandidateSet& candidates;
     const Quantifiers&  quantifiers;
 
-    /** backwardNbrs[d] = list of position indices in order[] that are
-     *  both before d and adjacent to order[d] in the query graph.    */
-    std::vector<std::vector<uint32_t>> backwardNbrs;
+    /* ── flat candidate pool ──────────────────────────────────────── *
+     *                                                                 *
+     * Layout:  candPool[ u * (qn+1) * maxCands                       *
+     *                    + level * maxCands ]                         *
+     *   level 0   = GQL baseline (copied once in constructor)        *
+     *   level k>0 = k-th narrowing of u's candidates                 *
+     *                                                                 *
+     * candTop[u]      : next free level index (0 after init → 1 after *
+     *                   first narrowing pushed)                       *
+     * candSz[u][lv]   : element count at level lv                    *
+     *                                                                 *
+     * getCands(u)  → pointer + size at candPool[ u ][ top-1 ]        *
+     * narrowCands  → intersect into [ u ][ top ], increment top      *
+     * undoCands    → decrement top for each u in updatedAtDepth[d]   */
+    uint32_t qn;
+    uint32_t maxCands;
 
-    std::vector<VertexID> mapping;    // mapping[u] = data vertex matched to query vertex u
-    std::vector<bool>     inMapping;  // inMapping[v] = true iff v is already used
+    std::vector<VertexID>  candPool;    // flat: qn * (qn+1) * maxCands
+    std::vector<uint32_t>  candTop;     // [qn]  current stack height
+    std::vector<uint32_t>  candSzFlat;  // [qn * (qn+1)]  sizes per level
 
-    /** failPos[d]: shallowest ancestor position p such that the failure at
-     *  depth d was caused (directly or transitively) by the choice at p.
-     *  Used by Failing Set pruning to skip siblings that cannot fix it. */
+    /* per-depth undo list */
+    std::vector<std::vector<VertexID>> updatedAtDepth;  // [depth] → query verts pushed
+
+    /* ── matching state ──────────────────────────────────────────── */
+    std::vector<VertexID> mapping;
+    std::vector<bool>     inMapping;
+    std::vector<bool>     placed;
+
+    std::vector<VertexID> matched;   // matched[depth]  = data vertex
+    std::vector<VertexID> dynOrder;  // dynOrder[depth] = query vertex
+
     std::vector<uint32_t> failPos;
-
-    /* LICM multi-level cache
-     * licmCache[d][i]     : sorted vertex list after incorporating BNs 0..i
-     * licmCacheSize[d][i] : valid element count                          */
-    std::vector<std::vector<std::vector<VertexID>>> licmCache;
-    std::vector<std::vector<uint32_t>>              licmCacheSize;
-
-    /** bnTargets[k]: all (depth, bnIdx) pairs where backwardNbrs[depth][bnIdx]==k.
-     *  Used by updateLICM() to find which cache entries to refresh when
-     *  position k is mapped.                                             */
-    std::vector<std::vector<BNTarget>> bnTargets;
-
-    DecisionTree decisionTree;
+    DecisionTree          decisionTree;
     uint64_t matchCount{0};
     uint64_t matchLimit{UINT64_MAX};
 
-    /** Current partial match: matched[i] = data vertex placed at position i. */
-    Order matched;
+    std::function<void(const std::vector<VertexID>& matched,
+                   const std::vector<VertexID>& dynOrder)> onMatch;
 
-    std::function<bool(const int*)> phi;
-    std::function<void(const std::vector<VertexID>&)> onMatch;
+    /* ── profiling ────────────────────────────────────────────────── */
+    std::vector<uint64_t> probeCount;
+    std::vector<uint64_t> licmPruned;
+    std::vector<uint64_t> dtPruned;
+    std::vector<uint64_t> narrowWork;   // total elements scanned in twoPointerIntersect
 
+    /* ── adaptive probe ordering ─────────────────────────────────── *
+     * dtFirst[d]      : true = try DT check before narrowCands at d  *
+     * lastAdaptAt[d]  : probeCount[d] value at last adaptation        */
+    std::vector<bool>     dtFirst;
+    std::vector<uint64_t> lastAdaptAt;
+
+    /* ── constructor ─────────────────────────────────────────────── */
     EnumContext(const Graph&        data_,
-                const QueryGraph&   query,
-                const Order&        order_,
+                const QueryGraph&   query_,
                 const CandidateSet& cands,
                 const Quantifiers&  quants,
                 uint64_t            limit = UINT64_MAX)
-        : data(data_), order(order_), candidates(cands), quantifiers(quants),
-          decisionTree(query.getNumVertices(), quantifiers.size(), quants),
+        : data(data_), query(query_), candidates(cands), quantifiers(quants),
+          decisionTree((int)query_.getNumVertices(),
+                       (int)quants.size(), quants),
           matchLimit(limit)
     {
-        const uint32_t qn = query.getNumVertices();
+        qn = query_.getNumVertices();
         const uint32_t dn = data_.getNumVertices();
-        mapping.assign(qn, UINT32_MAX);
-        inMapping.assign(dn, false);
-        failPos.assign(qn + 1, UINT32_MAX);
 
-        /* max candidate set size (upper bound for all cache buffers) */
-        uint32_t maxCands = 0;
+        maxCands = 0;
         for (const auto& c : cands)
             maxCands = std::max(maxCands, (uint32_t)c.size());
 
-        /* backward neighbor lists */
-        backwardNbrs.resize(qn);
-        for (uint32_t i = 1; i < qn; ++i) {
-            VertexID u = order[i];
-            for (uint32_t j = 0; j < i; ++j)
-                if (query.hasEdge(u, order[j]))
-                    backwardNbrs[i].push_back(j);
+        /* Flat pool allocation — one shot, no further heap traffic */
+        const uint32_t levels = qn + 1;  // GQL + one push per depth at most
+        candPool.resize((size_t)qn * levels * maxCands);
+        candTop.assign(qn, 1);           // level 0 already filled below
+        candSzFlat.assign((size_t)qn * levels, 0);
+
+        /* Copy GQL candidates into level 0 of each query vertex */
+        for (uint32_t u = 0; u < qn; ++u) {
+            uint32_t sz = (uint32_t)cands[u].size();
+            candSzFlat[u * levels + 0] = sz;
+            std::copy(cands[u].begin(), cands[u].end(),
+                      candPool.data() + (size_t)u * levels * maxCands);
         }
 
-        /* LICM cache: one buffer per (depth, bn_level) pair */
-        licmCache.resize(qn);
-        licmCacheSize.resize(qn);
-        for (uint32_t d = 0; d < qn; ++d) {
-            uint32_t numBN = (uint32_t)backwardNbrs[d].size();
-            licmCache[d].resize(numBN);
-            licmCacheSize[d].assign(numBN, 0);
-            for (uint32_t i = 0; i < numBN; ++i)
-                licmCache[d][i].resize(maxCands);
-        }
+        updatedAtDepth.resize(qn + 1);
 
-        /* bnTargets index: maps each position k to the list of
-         * (depth, bn_index) entries that need updating when k is mapped */
-        bnTargets.resize(qn);
-        for (uint32_t d = 1; d < qn; ++d) {
-            for (uint32_t i = 0; i < (uint32_t)backwardNbrs[d].size(); ++i) {
-                uint32_t k = backwardNbrs[d][i];
-                bnTargets[k].push_back({d, i});
-            }
-        }
-
+        mapping.assign(qn, UINT32_MAX);
+        inMapping.assign(dn, false);
+        placed.assign(qn, false);
+        failPos.assign(qn + 1, UINT32_MAX);
         matched.resize(qn);
+        dynOrder.resize(qn);
+
+        probeCount.assign(qn, 0);
+        licmPruned.assign(qn, 0);
+        dtPruned.assign(qn, 0);
+        narrowWork.assign(qn, 0);
+
+        /* Start with narrow-first (conservative default) */
+        dtFirst.assign(qn, false);
+        lastAdaptAt.assign(qn, 0);
     }
 
-    /**
-     * updateLICM — called immediately after mapping position k to vertex v.
-     *
-     * For every (depth d, bn_index i) in bnTargets[k], recomputes:
-     *   licmCache[d][i] = (i==0 ? candidates[order[d]] : licmCache[d][i-1])
-     *                     ∩ N(v)
-     *
-     * If any resulting cache becomes empty, depth d is provably
-     * unsatisfiable → returns false so the caller can prune v immediately.
-     */
-    bool updateLICM(uint32_t k, VertexID v) {
-        uint32_t        nbrDeg;
-        const VertexID* nbrPtr = data.getNeighbors(v, nbrDeg);
+    /* ── hot-path candidate accessors ────────────────────────────── */
 
-        for (const auto& [d, i] : bnTargets[k]) {
-            /* source = previous cache level, or static candidates for level 0 */
-            const VertexID* src;
-            uint32_t        srcSize;
-            if (i == 0) {
-                src     = candidates[order[d]].data();
-                srcSize = (uint32_t)candidates[order[d]].size();
-            } else {
-                src     = licmCache[d][i - 1].data();
-                srcSize = licmCacheSize[d][i - 1];
-            }
-
-            licmCacheSize[d][i] = twoPointerIntersect(
-                src, srcSize, nbrPtr, nbrDeg, licmCache[d][i].data());
-
-            /* Forward prune: depth d is already unsatisfiable */
-            if (licmCacheSize[d][i] == 0) return false;
-        }
-        return true;
+    inline VertexID* candPtr(uint32_t u, uint32_t lv) {
+        return candPool.data() + ((size_t)u * (qn + 1) + lv) * maxCands;
+    }
+    inline const VertexID* candPtr(uint32_t u, uint32_t lv) const {
+        return candPool.data() + ((size_t)u * (qn + 1) + lv) * maxCands;
     }
 
-    /**
-     * updateFail — merges a newly discovered failing position into failPos[d].
-     *
-     * Records the shallowest ancestor position 'pos' known to be
-     * responsible for a failure at depth d.  Only updates if pos is
-     * shallower than the currently recorded value (min semantics).
-     */
+    /* Returns pointer + size of current candidates for u */
+    inline std::pair<const VertexID*, uint32_t> getCands(uint32_t u) const {
+        uint32_t lv = candTop[u] - 1;
+        return { candPtr(u, lv), candSzFlat[u * (qn + 1) + lv] };
+    }
+
+    /* Intersect current candidates of u with N(v); push result.
+     * Returns false (and still pushes) if intersection is empty — caller
+     * must still call undoCands() before returning.                   */
+    inline bool narrowCands(uint32_t u, VertexID v, uint32_t depth) {
+        uint32_t        dDeg;
+        const VertexID* dNbrs = data.getNeighbors(v, dDeg);
+
+        auto [src, srcSz] = getCands(u);
+        narrowWork[depth] += srcSz + dDeg;   // elements touched by two-pointer
+        uint32_t lv   = candTop[u];
+        uint32_t newSz = twoPointerIntersect(src, srcSz, dNbrs, dDeg,
+                                              candPtr(u, lv));
+        candSzFlat[u * (qn + 1) + lv] = newSz;
+        ++candTop[u];
+        updatedAtDepth[depth].push_back(u);
+        return newSz > 0;
+    }
+
+    /* Undo all narrowings recorded at `depth` */
+    inline void undoCands(uint32_t depth) {
+        for (uint32_t u : updatedAtDepth[depth])
+            --candTop[u];
+        updatedAtDepth[depth].clear();
+    }
+
     void updateFail(uint32_t d, uint32_t pos) {
         if (failPos[d] == UINT32_MAX || pos < failPos[d])
             failPos[d] = pos;
     }
+
+    /* ── adaptive ordering ───────────────────────────────────────── *
+     *                                                                *
+     * Recompute dtFirst[d] using the cost model:                    *
+     *   E_A (narrow→DT) = C_n + (1-f)  * C_d                       *
+     *   E_B (DT→narrow) = C_d + (1-d') * C_n                       *
+     *   B < A  ⟺  C_d * f < C_n * d'                               *
+     *                                                                *
+     * where f  = fwd_prune_rate, d' = dt_prune_rate (cond. on fwd), *
+     *       C_n = avg narrow elements/probe, C_d = DT_COST_ELEMS.   *
+     *                                                                *
+     * Guard: require ADAPT_WARMUP probes before first evaluation,   *
+     * and at least 1 probe in each of the fwd and dt buckets.       */
+    void adaptStrategy(uint32_t d) {
+        uint64_t probes   = probeCount[d];
+        if (probes < ADAPT_WARMUP) return;
+
+        uint64_t fwd      = licmPruned[d];
+        uint64_t dt_p     = dtPruned[d];
+        uint64_t dt_calls = probes - fwd;   // probes that reached DT
+        if (dt_calls == 0 || fwd == 0) return;
+
+        /* C_n = narrowWork[d] / probes  (as a fixed-point ratio)     *
+         * Condition B < A:  DT_COST_ELEMS * fwd * dt_calls           *
+         *                <  narrowWork[d] * dt_p                     *
+         * All quantities are uint64_t — no floating point needed.    */
+        /* Scale lhs by dt_rate denominator to match units */
+        /* Condition: DT_COST_ELEMS * (fwd/probes) < (narrowWork/probes) * (dt_p/dt_calls) *
+         * Multiply both sides by probes * dt_calls to clear denominators:                  *
+         *   DT_COST_ELEMS * fwd * dt_calls  <  narrowWork[d] * dt_p                       */
+        bool should_dt_first =
+            (DT_COST_ELEMS * fwd * dt_calls < narrowWork[d] * dt_p);
+
+        dtFirst[d] = should_dt_first;
+    }
 };
 
-/* ------------------------------------------------------------------ *
- *  phi — second-order predicate                                        *
- *                                                                      *
- *  Defines the second-order constraint evaluated at each leaf of the  *
- *  decision tree.  It receives a coordinate tuple coords[0..k-1]      *
- *  where each coords[j] is a matched data vertex at some tree level.  *
- *                                                                      *
- *  Current semantics (example):                                        *
- *    Returns true iff the two matched vertices are "far apart"         *
- *    (absolute difference > 100) OR they are equal.                    *
- *    This enforces a constraint of the form:                           *
- *      |id(v0) - id(v1)| > 100  ∨  id(v0) == id(v1)                  *
- *                                                                      *
- *  Replace this function with the actual second-order predicate        *
- *  required by the query.  The signature must remain                  *
- *    bool phi(const int* coords)                                       *
- *  so it is compatible with DecisionTree::update_for_depth().         *
- * ------------------------------------------------------------------ */
-// bool phi(const int* coords)
-// {
-//     return coords[0] - coords[1] > 100
-//         || coords[1] - coords[0] > 100
-//         || coords[0] == coords[1];
-// }
+/* ------------------------------------------------------------------ */
 
-/** Prints the current complete match (one line per result). */
+/** Print one match line.  Format: "u->v u->v ..."  (dynamic order). */
 inline void printAnswer(const EnumContext& ctx)
 {
-    for (size_t i = 0; i < ctx.order.size(); ++i)
-        std::cout << ctx.matched[i] << " ";
-    std::cout << "\n";
+    for (uint32_t d = 0; d < ctx.qn; ++d) {
+        VertexID u = ctx.dynOrder[d];
+        if (d) std::cout << ' ';
+        std::cout << u << "->" << ctx.matched[d];
+    }
+    std::cout << '\n';
 }
 
 /* ================================================================== *
- *  backtrack                                                           *
+ *  backtrack — dynamic fail-first recursive search                     *
  *                                                                      *
- *  Core recursive search procedure.                                   *
+ *  Two probe orderings, selected per-depth by adaptStrategy():         *
  *                                                                      *
- *  At each call, 'depth' is the index into order[] of the next query  *
- *  vertex to be matched.  The function tries every viable data         *
- *  vertex for order[depth] and recurses.                              *
+ *  Order A  (narrow → DT, default):                                    *
+ *    narrowCands for all unplaced neighbours → if empty, prune (fwd)  *
+ *    update_for_depth → if NS_FALSE, prune (dt)                       *
+ *    recurse                                                            *
  *                                                                      *
- *  Pruning applied at each candidate v:                               *
- *    (a) Injectivity     — skip v if already in mapping               *
- *    (b) LICM / forward  — updateLICM() returns false if any future   *
- *                          depth becomes empty after placing v         *
- *    (c) Decision tree   — decisionTree.update_for_depth() returns     *
- *                          NS_FALSE if the second-order formula is     *
- *                          already violated under the current match    *
- *    (d) Failing Set     — if childFail < depth, the failure cannot   *
- *                          be fixed by trying other candidates at      *
- *                          this depth → return early                  *
+ *  Order B  (DT → narrow, when dtFirst[depth]):                        *
+ *    update_for_depth → if NS_FALSE, skip narrow entirely (dt)         *
+ *    narrowCands for all unplaced neighbours → if empty, prune (fwd)  *
+ *    recurse                                                            *
+ *    note: if narrow fails after DT passed, both are undone            *
  * ================================================================== */
-inline void backtrack(EnumContext& ctx, uint32_t depth)
+template<typename Fn>
+inline void backtrack(EnumContext& ctx, uint32_t depth, Fn&& phi)
 {
     if (ctx.matchCount >= ctx.matchLimit) return;
 
-    const uint32_t qn = (uint32_t)ctx.order.size();
-
-    /* Base case: all query vertices matched */
-    if (depth == qn) {
-        // Accept only if the second-order formula evaluated to TRUE
-        if (node::state(ctx.decisionTree.nodes[0]) == NS_TRUE) {
+    /* Base case */
+    if (depth == ctx.qn) {
+        if (ctx.decisionTree.nodes[0] == NS_TRUE) {
             ++ctx.matchCount;
-            if (ctx.onMatch) ctx.onMatch(ctx.matched);
-            // printAnswer(ctx);  // uncomment to print each match
+            if (ctx.onMatch) ctx.onMatch(ctx.matched, ctx.dynOrder);
         }
         return;
     }
 
-    const VertexID  u     = ctx.order[depth];
-    const auto&     bnPos = ctx.backwardNbrs[depth];
-    const uint32_t  numBN = (uint32_t)bnPos.size();
-
-    /* ── Get local candidates ───────────────────────────────────── *
-     * With LICM, all BN intersections were precomputed when each BN *
-     * position was mapped. Just read the final cache level.         *
-     * No intersection loop needed here at all.                      */
-    const VertexID* localPtr;
-    uint32_t        localSize;
-
-    if (numBN == 0) {
-        /* depth 0 or no BNs: use static candidate set directly */
-        localPtr  = ctx.candidates[u].data();
-        localSize = (uint32_t)ctx.candidates[u].size();
-    } else {
-        /* All BNs pre-incorporated in the last LICM cache level */
-        localPtr  = ctx.licmCache[depth][numBN - 1].data();
-        localSize = ctx.licmCacheSize[depth][numBN - 1];
-        if (localSize == 0) {
-            /* Should have been caught by forward pruning, but be safe */
-            ctx.updateFail(depth, bnPos[0]);
-            if (ctx.onMatch) ctx.onMatch(ctx.matched);
-            return;
-        }
+    /* Fail-first: pick unplaced query vertex with smallest candidates */
+    uint32_t bestU  = UINT32_MAX;
+    uint32_t bestSz = UINT32_MAX;
+    for (uint32_t u = 0; u < ctx.qn; ++u) {
+        if (ctx.placed[u]) continue;
+        uint32_t sz = ctx.getCands(u).second;
+        if (sz < bestSz) { bestSz = sz; bestU = u; }
     }
 
-    /* ── Iterate local candidates ───────────────────────────────── */
-    for (uint32_t i = 0; i < localSize; ++i) {
+    if (bestSz == 0) {
+        ctx.updateFail(depth, depth > 0 ? depth - 1 : 0);
+        return;
+    }
+
+    ctx.dynOrder[depth] = bestU;
+
+    /* Iterate directly over the pool slice — no snapshot copy needed.
+     * Safety: narrowCands() only touches *neighbours* of bestU, never
+     * bestU's own pool slot, so the pointer stays valid for the entire
+     * loop even as other vertices' candidates are narrowed and restored. */
+    const VertexID* localPtr = ctx.candPtr(bestU, ctx.candTop[bestU] - 1);
+    const uint32_t  localSz  = ctx.candSzFlat[bestU * (ctx.qn + 1)
+                                               + ctx.candTop[bestU] - 1];
+
+    uint32_t        qDeg;
+    const VertexID* qNbrs = ctx.query.getNeighbors(bestU, qDeg);
+
+    /* Sort unplaced query neighbours by current candidate size ascending.
+     * twoPointerIntersect is O(src + deg); processing the most-constrained
+     * (smallest) neighbour first means we hit a zero-intersection and exit
+     * the inner loop as early as possible, skipping larger neighbours.    */
+    uint32_t nbrBuf[64];   // query graph is small; stack buffer is enough
+    uint32_t nbrCnt = 0;
+    for (uint32_t ni = 0; ni < qDeg; ++ni) {
+        uint32_t w = qNbrs[ni];
+        if (!ctx.placed[w]) nbrBuf[nbrCnt++] = w;
+    }
+    std::sort(nbrBuf, nbrBuf + nbrCnt, [&](uint32_t a, uint32_t b) {
+        return ctx.getCands(a).second < ctx.getCands(b).second;
+    });
+
+    for (uint32_t ci = 0; ci < localSz; ++ci) {
         if (ctx.matchCount >= ctx.matchLimit) return;
-
-        VertexID v = localPtr[i];
-
-        /* (a) Injectivity: reject vertices already in the mapping */
+        VertexID v = localPtr[ci];
         if (ctx.inMapping[v]) continue;
+        ++ctx.probeCount[depth];
 
-        /* (b) LICM + forward pruning:
-         *     Recompute cache entries for all depths that have 'depth'
-         *     as one of their BNs.  Returns false if any depth becomes
-         *     unsatisfiable → skip v without recursing.              */
-        if (!ctx.updateLICM(depth, v)) continue;
-
-        ctx.matched[depth] = v;
-
-        /* (c) Decision tree check:
-         *     Insert newly evaluable leaf paths contributed by placing
-         *     v at this depth.  NS_FALSE means the formula is already
-         *     violated — prune and undo.                             */
-        if (ctx.decisionTree.update_for_depth(depth, ctx.matched, ctx.phi) == NS_FALSE) {
-            ctx.decisionTree.undo_to(depth);
-            continue;
+        /* Periodically re-evaluate the optimal ordering for this depth */
+        if (ctx.probeCount[depth] - ctx.lastAdaptAt[depth] >= ADAPT_INTERVAL) {
+            ctx.adaptStrategy(depth);
+            ctx.lastAdaptAt[depth] = ctx.probeCount[depth];
         }
 
-        ctx.failPos[depth + 1] = UINT32_MAX;
-        ctx.mapping[u]   = v;
-        ctx.inMapping[v] = true;
+        if (ctx.dtFirst[depth]) {
+            /* ── Order B: DT check first ──────────────────────────── *
+             * Try the phi constraint before paying for narrowCands.   *
+             * If DT prunes, we skip the intersection work entirely.   *
+             *                                                          *
+             * update_for_depth always modifies tree state (log entries *
+             * are written for NS_FALSE, NS_TRUE, and NS_UNKNOWN alike).*
+             * undo_to(depth) must therefore be called on every exit   *
+             * path — whether DT pruned, narrow pruned, or recursion   *
+             * returned — regardless of the returned NodeState.        */
+            ctx.matched[depth] = v;
+            bool dt_fail = false;
 
-        backtrack(ctx, depth + 1);
+            dt_fail = (ctx.decisionTree.update_for_depth(
+                           depth, ctx.matched, phi) == NS_FALSE);
 
-        /* Undo this choice */
-        ctx.mapping[u]   = UINT32_MAX;
-        ctx.inMapping[v] = false;
-        ctx.decisionTree.undo_to(depth);
+            if (dt_fail) {
+                /* DT pruned — narrowCands was never called.
+                 * Undo the tree state written by update_for_depth.   */
+                ctx.decisionTree.undo_to(depth);
+                ++ctx.dtPruned[depth];
+                continue;
+            }
 
-        if (ctx.matchCount >= ctx.matchLimit) return;
+            /* DT passed — now pay for narrowCands */
+            bool fwd_fail = false;
+            for (uint32_t ni = 0; ni < nbrCnt && !fwd_fail; ++ni) {
+                if (!ctx.narrowCands(nbrBuf[ni], v, depth)) {
+                    fwd_fail = true;
+                    ++ctx.licmPruned[depth];
+                }
+            }
 
-        /* (d) Failing Set propagation:
-         *     If the subtree rooted at depth+1 failed because of a
-         *     choice at an ancestor shallower than this depth, no
-         *     sibling candidate can fix it → cut this branch early.  */
-        uint32_t childFail = ctx.failPos[depth + 1];
-        if (childFail != UINT32_MAX) {
-            ctx.updateFail(depth, childFail);
-            if (childFail < depth)
-                return;
+            if (fwd_fail) {
+                /* Narrow failed after DT passed — undo both */
+                ctx.undoCands(depth);
+                ctx.decisionTree.undo_to(depth);
+                continue;
+            }
+
+            /* Both passed — recurse */
+            ctx.failPos[depth + 1] = UINT32_MAX;
+            ctx.mapping[bestU] = v;
+            ctx.inMapping[v]   = true;
+            ctx.placed[bestU]  = true;
+
+            backtrack(ctx, depth + 1, phi);
+
+            ctx.mapping[bestU] = UINT32_MAX;
+            ctx.inMapping[v]   = false;
+            ctx.placed[bestU]  = false;
+            ctx.undoCands(depth);
+            ctx.decisionTree.undo_to(depth);
+
+            if (ctx.matchCount >= ctx.matchLimit) return;
+
+            uint32_t childFail = ctx.failPos[depth + 1];
+            if (childFail != UINT32_MAX) {
+                ctx.updateFail(depth, childFail);
+                if (childFail < depth) return;
+            }
+
+        } else {
+            /* ── Order A: narrow first (default) ──────────────────── */
+            bool fwd_fail = false;
+            for (uint32_t ni = 0; ni < nbrCnt && !fwd_fail; ++ni) {
+                if (!ctx.narrowCands(nbrBuf[ni], v, depth)) {
+                    fwd_fail = true;
+                    ++ctx.licmPruned[depth];
+                }
+            }
+
+            if (!fwd_fail) {
+                ctx.matched[depth] = v;
+                bool dt_fail = false;
+
+                if (ctx.decisionTree.update_for_depth(depth, ctx.matched, phi)
+                        == NS_FALSE) {
+                    ctx.decisionTree.undo_to(depth);
+                    dt_fail = true;
+                }
+
+                if (dt_fail) {
+                    ++ctx.dtPruned[depth];
+                } else {
+                    ctx.failPos[depth + 1] = UINT32_MAX;
+                    ctx.mapping[bestU] = v;
+                    ctx.inMapping[v]   = true;
+                    ctx.placed[bestU]  = true;
+
+                    backtrack(ctx, depth + 1, phi);
+
+                    ctx.mapping[bestU] = UINT32_MAX;
+                    ctx.inMapping[v]   = false;
+                    ctx.placed[bestU]  = false;
+                    ctx.decisionTree.undo_to(depth);
+
+                    if (ctx.matchCount >= ctx.matchLimit) {
+                        ctx.undoCands(depth);
+                        return;
+                    }
+
+                    uint32_t childFail = ctx.failPos[depth + 1];
+                    if (childFail != UINT32_MAX) {
+                        ctx.updateFail(depth, childFail);
+                        if (childFail < depth) {
+                            ctx.undoCands(depth);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            ctx.undoCands(depth);
         }
     }
 }
 
-/**
- * enumerate — top-level entry point.
- *
- * Builds an EnumContext, runs the backtracking search, and returns the
- * total number of valid subgraph isomorphisms found (up to 'limit').
- */
+/* ================================================================== *
+ *  enumerate — public entry points (Order parameter removed)          *
+ * ================================================================== */
+
 inline uint64_t enumerate(const QueryGraph&   query,
                            const Graph&        data,
                            const CandidateSet& candidates,
-                           const Order&        order,
                            const Quantifiers&  quantifiers,
                            uint64_t            limit = UINT64_MAX)
 {
-    EnumContext ctx(data, query, order, candidates, quantifiers, limit);
-    backtrack(ctx, 0);
+    EnumContext ctx(data, query, candidates, quantifiers, limit);
+    backtrack(ctx, 0, [](const int*) noexcept { return true; });
+    return ctx.matchCount;
+}
+
+template<typename Fn>
+inline uint64_t enumerate(const QueryGraph&   query,
+                           const Graph&        data,
+                           const CandidateSet& candidates,
+                           const Quantifiers&  quantifiers,
+                           uint64_t            limit,
+                           Fn&&                phi)
+{
+    EnumContext ctx(data, query, candidates, quantifiers, limit);
+    backtrack(ctx, 0, std::forward<Fn>(phi));
     return ctx.matchCount;
 }

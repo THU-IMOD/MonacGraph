@@ -28,7 +28,14 @@
       </div>
     </div>
 
-    <div ref="cyContainer" class="cy-container"></div>
+    <div ref="cyContainer" class="cy-container">
+      <!-- Shown when the graph exceeds the render limit -->
+      <div v-if="isTooLarge" class="too-large-overlay">
+        <div class="too-large-icon">⚠</div>
+        <div class="too-large-title">Graph Too Large to Render</div>
+        <div class="too-large-desc">{{ tooLargeMessage }}</div>
+      </div>
+    </div>
 
     <!-- 节点详情面板 -->
     <el-card 
@@ -78,6 +85,11 @@ let cy = null
 
 const currentLayout = ref('cose-bilkent')  // 默认使用cose-bilkent布局
 const selectedNode = ref(null)
+
+// Graph size limit
+const RENDER_LIMIT = 1000
+const isTooLarge = ref(false)
+const tooLargeMessage = ref('')
 
 // 布局配置
 const layouts = {
@@ -405,6 +417,20 @@ const calculateNodeSize = (nodeCount) => {
 const updateGraph = () => {
   if (!cy) return
 
+  const nodeCount = store.graphData.nodes.length
+  const edgeCount = store.graphData.edges.length
+
+  // If graph is too large, clear canvas and show a message instead of rendering
+  if (nodeCount > RENDER_LIMIT || edgeCount > RENDER_LIMIT) {
+    cy.elements().remove()
+    isTooLarge.value = true
+    tooLargeMessage.value = `Graph is too large to render (${nodeCount} nodes, ${edgeCount} edges). Rendering is disabled when nodes or edges exceed ${RENDER_LIMIT}.`
+    return
+  }
+
+  isTooLarge.value = false
+  tooLargeMessage.value = ''
+
   const elements = [
     ...store.graphData.nodes,
     ...store.graphData.edges
@@ -581,6 +607,36 @@ onMounted(async () => {
       linear-gradient(rgba(102, 126, 234, 0.05) 1px, transparent 1px),
       linear-gradient(90deg, rgba(102, 126, 234, 0.05) 1px, transparent 1px);
     background-size: 50px 50px;
+
+    .too-large-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      pointer-events: none;
+
+      .too-large-icon {
+        font-size: 48px;
+        opacity: 0.4;
+      }
+
+      .too-large-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #4a5568;
+      }
+
+      .too-large-desc {
+        font-size: 13px;
+        color: #718096;
+        text-align: center;
+        max-width: 420px;
+        line-height: 1.6;
+      }
+    }
   }
 
   .node-details {

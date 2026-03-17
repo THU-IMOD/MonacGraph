@@ -139,19 +139,19 @@
           <!-- Vertex Cards -->
           <el-scrollbar v-else class="vertex-scrollbar">
             <el-card
-              v-for="(props, vertexId) in currentSubset.properties"
-              :key="vertexId"
+              v-for="vertex in currentSubset.vertexList"
+              :key="vertex.id"
               class="vertex-card"
               shadow="hover"
             >
               <div class="vertex-info">
                 <div class="vertex-id">
-                  <el-tag type="primary" size="small">ID: {{ vertexId }}</el-tag>
-                  <el-tag size="small">{{ props.label }}</el-tag>
+                  <el-tag type="primary" size="small">ID: {{ vertex.id }}</el-tag>
+                  <el-tag size="small">{{ vertex.label }}</el-tag>
                 </div>
                 <div class="vertex-props">
                   <span
-                    v-for="(value, key) in filterProperties(props)"
+                    v-for="(value, key) in vertex.props"
                     :key="key"
                     class="prop-item"
                   >
@@ -187,31 +187,24 @@ const currentIndex = ref(0)
 // Adapt new format to old format for backward compatibility
 const currentSubset = computed(() => {
   const subset = subsets.value[currentIndex.value] || { size: 0, vertices: [], edges: [] }
-  
-  // New format: vertices is array of objects like [{id: 1, label: "person", properties: {...}}]
-  // Old format expected: properties is object like {1: {id: 1, label: "person", ...}}
+
   if (subset.size === 0) {
-    return { size: 0, vertices: [], edges: [], properties: {} }
+    return { size: 0, vertices: [], edges: [], vertexList: [] }
   }
-  
-  // Convert new format to compatible format
-  const vertexIds = []
-  const properties = {}
-  
-  for (const vertex of subset.vertices) {
-    vertexIds.push(vertex.id)
-    properties[vertex.id] = {
-      id: vertex.id,
-      label: vertex.label,
-      ...vertex.properties
-    }
-  }
-  
+
+  // vertexList preserves the order of subset.vertices, which corresponds to
+  // query vertex 0, 1, 2, ... — no conversion to a keyed object so order is never lost
+  const vertexList = subset.vertices.map(vertex => ({
+    id: vertex.id,
+    label: vertex.label,
+    props: filterProperties(vertex.properties || {})
+  }))
+
   return {
     size: subset.size,
-    vertices: vertexIds,
+    vertices: subset.vertices.map(v => v.id),
     edges: subset.edges || [],
-    properties: properties
+    vertexList
   }
 })
 
@@ -319,13 +312,12 @@ const initSubsetGraph = async () => {
     }
 
     // Create nodes from current subset
-    const nodes = currentSubset.value.vertices.map(vertexId => {
-      const props = currentSubset.value.properties[vertexId]
+    const nodes = currentSubset.value.vertexList.map(vertex => {
       return {
         data: {
-          id: String(vertexId),
-          label: props.label || 'node',
-          ...props
+          id: String(vertex.id),
+          label: vertex.label || 'node',
+          ...vertex.props
         }
       }
     })
@@ -871,7 +863,7 @@ onUnmounted(() => {
 }
 
 .subset-visualization {
-  height: 450px;  /* 调整为450px */
+  height: 420px;
   background: linear-gradient(135deg, 
     rgba(102, 126, 234, 0.03) 0%, 
     rgba(118, 75, 162, 0.03) 50%, 

@@ -17,7 +17,7 @@ public class SubgraphPhiCallback {
 
     private final GraphTraversalSource g;
     private final List<Map.Entry<String, String>> conditions;
-    private final Map<Integer, Vertex> indexToVertex;
+    private final Vertex[] indexToVertex;
 
     /**
      * Pre-parsed AST — replaces the non-existent compileFilter().
@@ -28,7 +28,7 @@ public class SubgraphPhiCallback {
 
     public SubgraphPhiCallback(GraphTraversalSource g,
                                List<Map.Entry<String, String>> conditions,
-                               Map<Integer, Vertex> indexToVertex,
+                               Vertex[] indexToVertex,
                                String filterQuery) {
         this.g             = g;
         this.conditions    = conditions;
@@ -49,7 +49,7 @@ public class SubgraphPhiCallback {
 
         for (int i = 0; i < conditions.size(); i++) {
             String varName = conditions.get(i).getKey();
-            Vertex vertex  = indexToVertex.get(coords[i]);
+            Vertex vertex  = indexToVertex[coords[i]];
             if (vertex == null) return false;   // unknown index → predicate fails
             // Bind the vertex ID so that g.V(x) resolves correctly in Groovy
             variables.put(varName, vertex);
