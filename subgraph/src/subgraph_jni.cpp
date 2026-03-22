@@ -35,8 +35,9 @@ Java_db_monacgraph_jni_SubgraphJNI_nativeRunSubgraphMatch(
     int   k    = env->GetArrayLength(jQuantifiers);
     jint* qArr = env->GetIntArrayElements(jQuantifiers, nullptr);
     std::vector<Quantifier> quantifiers(k);
-    for (int i = 0; i < k; i++)
+    for (int i = 0; i < k; i++) {
         quantifiers[i] = (qArr[i] == 1) ? EXISTS : FORALL;
+    }
     env->ReleaseIntArrayElements(jQuantifiers, qArr, JNI_ABORT);
 
     /* ── 3. Build phi closure that calls back to Java ─────────── *
@@ -46,54 +47,59 @@ Java_db_monacgraph_jni_SubgraphJNI_nativeRunSubgraphMatch(
      *    Z  = boolean return                                       *
      *                                                              *
      *  We take a global ref to the callback object so it stays    *
-     *  alive across the entire recursive backtrack call.          */
+     *  alive across the entire backtrack call.                    */
     jclass    callbackClass = env->GetObjectClass(jPhiCallback);
     jmethodID evaluateMid   = env->GetMethodID(callbackClass,
                                                "evaluate", "([I)Z");
     jobject   callbackRef   = env->NewGlobalRef(jPhiCallback);
 
     auto phi = [env, callbackRef, evaluateMid, k](const int* coords) -> bool {
-        // Pack coords into a Java int[]
         jintArray jCoords = env->NewIntArray(k);
-        env->SetIntArrayRegion(jCoords, 0, k, reinterpret_cast<const jint*>(coords));
-        jboolean result = env->CallBooleanMethod(callbackRef, evaluateMid, jCoords);
+        env->SetIntArrayRegion(jCoords, 0, k,
+                               reinterpret_cast<const jint*>(coords));
+        jboolean result = env->CallBooleanMethod(callbackRef, evaluateMid,
+                                                 jCoords);
         env->DeleteLocalRef(jCoords);
         return static_cast<bool>(result);
     };
 
-    /* ── 4. Filter candidates ────────────────────────────────────── */
+    /* ── 4. Filter candidates ─────────────────────────────────── */
     CandidateSet candidates;
-    filterByGQL(query, data, candidates);
+    computeFilter(FilterStrategy::GQL, query, data, candidates);
 
     /* ── 5. Backtrack with result collection ─────────────────── */
     std::vector<std::vector<VertexID>> matchResults;
+    const uint32_t qn = query.getNumVertices();
 
     EnumContext ctx(data, query, candidates, quantifiers, 1000);
-    ctx.onMatch = [&](const std::vector<VertexID>& matched,
-                  const std::vector<VertexID>& dynOrder) {
-        std::vector<VertexID> canonical(ctx.qn);
-        for (uint32_t d = 0; d < ctx.qn; ++d)
+    ctx.onMatch = [&](const VertexID* matched,
+                      const VertexID* dynOrder,
+                      uint32_t        n) {
+        std::vector<VertexID> canonical(n);
+        for (uint32_t d = 0; d < n; ++d) {
             canonical[dynOrder[d]] = matched[d];
+        }
         matchResults.push_back(canonical);
     };
 
-    backtrack(ctx, 0, phi);
+    backtrack(ctx, phi);
     env->DeleteGlobalRef(callbackRef);
 
     /* ── 6. Encode results as flat jlong[] ───────────────────── *
      *  Layout: [M, m0v0, m0v1, ..., m_{M-1}v_{qn-1}]           */
-    const int      qn         = static_cast<int>(query.getNumVertices());
-    const long     matchCount = static_cast<long>(matchResults.size());
-    const jsize    arrayLen   = static_cast<jsize>(1 + matchCount * qn);
+    const long  matchCount = static_cast<long>(matchResults.size());
+    const jsize arrayLen   = static_cast<jsize>(1 + matchCount * qn);
 
     jlongArray result = env->NewLongArray(arrayLen);
     std::vector<jlong> buf;
     buf.reserve(arrayLen);
     buf.push_back(static_cast<jlong>(matchCount));
 
-    for (const auto& match : matchResults)
-        for (VertexID vid : match)
+    for (const auto& match : matchResults) {
+        for (VertexID vid : match) {
             buf.push_back(static_cast<jlong>(vid));
+        }
+    }
 
     env->SetLongArrayRegion(result, 0, arrayLen, buf.data());
     return result;
