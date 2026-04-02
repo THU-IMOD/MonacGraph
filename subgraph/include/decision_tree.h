@@ -251,16 +251,19 @@ public:
 
     /* ── update_tree ─────────────────────────────────────────────── *
      *                                                                 *
-     * cl[0..new_depth] is the complete child list for node p.       *
-     * cl[0..new_depth-1] are "old" children (may already be decided)*
-     * cl[new_depth]      is the "new" child (always UNKNOWN on      *
-     *                    first visit).                               *
+     * has_new: true iff the current path has already chosen          *
+     * new_depth at some ancestor level.                              *
      *                                                                *
-     * Old children that were evaluated in a previous call return    *
-     * immediately via the nodes[p] != NS_UNKNOWN guard at the top.  *
-     * No has_new flag is needed.                                     */
+     * At depth=k with has_new=false: none of the old children       *
+     * cl[0..new_depth-1] have been visited yet in this call (they   *
+     * were fully decided in previous update_for_depth calls and      *
+     * would immediately return false).  Skipping them avoids O(d)   *
+     * redundant calls per depth-k node × O(n^{k-1}) such nodes.    *
+     *                                                                *
+     * visit_flat provides O(1) child lookup; has_new avoids         *
+     * redundant traversal.  Both are needed.                        */
     template<typename Fn>
-    bool update_tree(int depth, int p, Fn&& phi)
+    bool update_tree(int depth, int p, bool has_new, Fn&& phi)
     {
         if (nodes[p] != NS_UNKNOWN) {
             return false;
@@ -277,10 +280,24 @@ public:
 
         const int* cl = visit_flat.data() + visit_base[p];
 
-        for (int i = 0; i <= new_depth; ++i) {
-            enum_coords[depth - 1] = matched[i];
-            int q = cl[i];
-            if (update_tree(depth + 1, q, phi)) {
+        if (depth != k || has_new) {
+            for (int i = 0; i < new_depth; ++i) {
+                enum_coords[depth - 1] = matched[i];
+                int q = cl[i];
+                if (update_tree(depth + 1, q, has_new, phi)) {
+                    if (nodes[q] == is_exists) {
+                        log.push_back({p});
+                        nodes[p] = is_exists;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        {
+            enum_coords[depth - 1] = matched[new_depth];
+            int q = cl[new_depth];
+            if (update_tree(depth + 1, q, true, phi)) {
                 if (nodes[q] == is_exists) {
                     log.push_back({p});
                     nodes[p] = is_exists;
@@ -312,9 +329,9 @@ public:
         new_depth     = bt_depth;
         this->matched = matched_;
         if (sym_active) {
-            update_tree_sym(1, 0, phi);
+            update_tree_sym(1, 0, false, phi);
         } else {
-            update_tree(1, 0, phi);
+            update_tree(1, 0, false, phi);
         }
         return static_cast<NodeState>(nodes[0]);
     }
@@ -772,11 +789,10 @@ private:
 
     /* ── update_tree_sym ─────────────────────────────────────────── *
      *                                                                 *
-     * Sym-compressed version of update_tree.  has_new is gone:      *
-     * cl[0..new_slot] is the precomputed canonical child list and    *
-     * already-decided nodes self-prune via nodes[p] != NS_UNKNOWN.  */
+     * Sym-compressed version of update_tree.  has_new semantics are  *
+     * identical: skip old children at depth=k when has_new=false.   */
     template<typename Fn>
-    bool update_tree_sym(int depth, int p, Fn&& phi)
+    bool update_tree_sym(int depth, int p, bool has_new, Fn&& phi)
     {
         if (nodes[p] != NS_UNKNOWN) {
             return false;
@@ -805,10 +821,24 @@ private:
         const int* cl       = visit_flat.data() + visit_base[p];
         const int  new_slot = new_depth - v_min;
 
-        for (int i = 0; i <= new_slot; ++i) {
-            enum_coords[qidx] = matched[v_min + i];
-            int q = cl[i];
-            if (update_tree_sym(depth + 1, q, phi)) {
+        if (depth != k || has_new) {
+            for (int i = 0; i < new_slot; ++i) {
+                enum_coords[qidx] = matched[v_min + i];
+                int q = cl[i];
+                if (update_tree_sym(depth + 1, q, has_new, phi)) {
+                    if (nodes[q] == is_exists) {
+                        log.push_back({p});
+                        nodes[p] = is_exists;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        {
+            enum_coords[qidx] = matched[new_depth];
+            int q = cl[new_slot];
+            if (update_tree_sym(depth + 1, q, true, phi)) {
                 if (nodes[q] == is_exists) {
                     log.push_back({p});
                     nodes[p] = is_exists;

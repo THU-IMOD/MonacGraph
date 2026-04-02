@@ -4,6 +4,8 @@
 #include "order.h"
 #include "decision_tree.h"
 #include "trie.h"
+#include "symmetry.h"
+#include <queue>
 
 /**
  * Dynamic fail-first subgraph enumeration with adaptive probe ordering.
@@ -309,6 +311,24 @@ struct EnumContext {
 
     bool*      dtFirst{nullptr};     // [qn]
 
+    /* ── symmetry-breaking constraints (from SymBreak) ───────────── *
+     * symConstraints[u].first  = { w : mapping[w] < mapping[u] }    *
+     * symConstraints[u].second = { w : mapping[u] < mapping[w] }    *
+     * symEndArr[d]  — upper-bound index into candidate pool at d;    *
+     *                 computed once on entry, stored per depth.      *
+     * symPruned[d]  — candidates skipped by symmetry at depth d.    */
+    uint32_t*  symEndArr{nullptr};   // [qn]
+    std::unordered_map<VertexID,
+        std::pair<std::set<VertexID>, std::set<VertexID>>> symConstraints;
+    std::vector<uint64_t> symPruned;
+
+    /* ── automorphism group (from SymBreak) ──────────────────────── *
+     * autGroupSize   : |Aut(query)| — multiplier for match counting  *
+     * autGenerators  : generator set; autGenerators[i][u] = σᵢ(u)  *
+     * When empty, behaviour is identical to the non-symmetric case.  */
+    uint64_t autGroupSize{1};
+    std::vector<std::vector<VertexID>> autGenerators;
+
     /* ── constructor ─────────────────────────────────────────────── */
     EnumContext(const Graph&        data_,
                 const QueryGraph&   query_,
@@ -316,11 +336,19 @@ struct EnumContext {
                 const Quantifiers&  quants,
                 uint64_t            limit = UINT64_MAX,
                 const Order&        staticOrd = {},
-                bool                sym = false)
+                bool                sym = false,
+                std::unordered_map<VertexID,
+                    std::pair<std::set<VertexID>,
+                              std::set<VertexID>>> symCons = {},
+                uint64_t                           autSize  = 1,
+                std::vector<std::vector<VertexID>> autGens  = {})
         : data(data_), query(query_), candidates(cands), quantifiers(quants),
           decisionTree((int)query_.getNumVertices(),
                        (int)quants.size(), quants, sym),
-          matchLimit(limit)
+          matchLimit(limit),
+          symConstraints(std::move(symCons)),
+          autGroupSize(autSize),
+          autGenerators(std::move(autGens))
     {
         qn = query_.getNumVertices();
         const uint32_t dn  = data_.getNumVertices();
@@ -379,6 +407,10 @@ struct EnumContext {
         nbrCnts  = new uint32_t[qn]();
 
         dtFirst = new bool[qn]();   // false = narrow-first default
+
+        symEndArr = new uint32_t[qn];
+        std::fill(symEndArr, symEndArr + qn, UINT32_MAX);
+        symPruned.assign(qn, 0);
     }
 
     ~EnumContext() {
@@ -406,6 +438,7 @@ struct EnumContext {
         delete[] nbrBufs;
         delete[] nbrCnts;
         delete[] dtFirst;
+        delete[] symEndArr;
         delete   matchTrie;
     }
 
@@ -554,7 +587,76 @@ inline void printAnswer(const EnumContext& ctx)
 }
 
 /* ================================================================== *
- *  AblationMode — controls which subsystems are active               *
+ *  Orbit generation helpers for symmetric match enumeration           *
+ *                                                                      *
+ *  applyAut — apply generator sigma to match m (raw pointer inputs).  *
+ *    new_matched[d] = m[ queryToDepth[ sigma_inv[ dynOrder[d] ] ] ]   *
+ *                                                                      *
+ *  generateMatchOrbit — BFS over the automorphism group: starts from  *
+ *    base, applies each generator, collects all distinct matches.     *
+ *    For each orbit element, increments matchCount and fires onMatch  *
+ *    or inserts into matchTrie.                                        *
+ * ================================================================== */
+
+inline void applyAut(const VertexID*              m,
+                     const VertexID*              dynOrder,
+                     const std::vector<VertexID>& sigma,
+                     uint32_t                     qn,
+                     VertexID*                    out)
+{
+    std::vector<uint32_t> queryToDepth(qn);
+    for (uint32_t d = 0; d < qn; ++d)
+        queryToDepth[dynOrder[d]] = d;
+
+    std::vector<VertexID> sigma_inv(qn);
+    for (uint32_t u = 0; u < qn; ++u)
+        sigma_inv[sigma[u]] = u;
+
+    for (uint32_t d = 0; d < qn; ++d)
+        out[d] = m[ queryToDepth[ sigma_inv[ dynOrder[d] ] ] ];
+}
+
+inline void generateMatchOrbit(
+        EnumContext& ctx,
+        const std::vector<std::vector<VertexID>>& generators)
+{
+    const uint32_t qn = ctx.qn;
+
+    /* Seed the BFS with the canonical match currently in ctx.matched. */
+    using Match = std::vector<VertexID>;
+    std::set<Match>   seen;
+    std::queue<Match> q;
+
+    Match base(ctx.matched, ctx.matched + qn);
+    seen.insert(base);
+    q.push(base);
+
+    std::vector<VertexID> buf(qn);   // reusable apply buffer
+
+    while (!q.empty()) {
+        Match cur = std::move(q.front()); q.pop();
+
+        /* Count and report this orbit element. */
+        ++ctx.matchCount;
+        if (ctx.matchTrie) {
+            ctx.matchTrie->insert(cur.data(), qn);
+        } else if (ctx.onMatch) {
+            ctx.onMatch(cur.data(), ctx.dynOrder, qn);
+        }
+
+        /* Apply every generator to discover new orbit elements. */
+        for (const auto& gen : generators) {
+            applyAut(cur.data(), ctx.dynOrder, gen, qn, buf.data());
+            Match next(buf.begin(), buf.end());
+            if (!seen.count(next)) {
+                seen.insert(next);
+                q.push(std::move(next));
+            }
+        }
+    }
+}
+
+/* ================================================================== *
  *                                                                      *
  *  FULL       — full system: DT pruning + adaptive probe ordering    *
  *  NO_DT      — structural narrowing only; phi verified by brute      *
@@ -662,6 +764,36 @@ inline void backtrack_impl(EnumContext& ctx, Fn&& phi)
                 });
                 ctx.nbrCnts[depth] = nbrCnt;
             }
+
+            /* ── Symmetry-breaking bounds ──────────────────────────── *
+             * Compute [symLo, symHi) once on entry via binary search.  *
+             * candIdx is advanced to startCi; symEndArr[depth] stores  *
+             * endCi so the ITERATE while-condition enforces the upper  *
+             * bound without any per-candidate check.                   *
+             *                                                           *
+             * symPruned accounts for candidates outside [lo, hi).     */
+            {
+                const VertexID* lPtrE = ctx.candPtr(bestU, ctx.candTop[bestU] - 1);
+                const uint32_t  lSzE  = ctx.candSzFlat[bestU * (ctx.qn + 1)
+                                                        + ctx.candTop[bestU] - 1];
+                VertexID symLo = 0, symHi = UINT32_MAX;
+                auto it = ctx.symConstraints.find(bestU);
+                if (it != ctx.symConstraints.end()) {
+                    for (VertexID w : it->second.first)
+                        if (ctx.placed[w])
+                            symLo = std::max(symLo, ctx.mapping[w] + 1);
+                    for (VertexID w : it->second.second)
+                        if (ctx.placed[w])
+                            symHi = std::min(symHi, ctx.mapping[w]);
+                }
+                const uint32_t startCi = static_cast<uint32_t>(
+                    std::lower_bound(lPtrE, lPtrE + lSzE, symLo) - lPtrE);
+                const uint32_t endCi = static_cast<uint32_t>(
+                    std::lower_bound(lPtrE + startCi, lPtrE + lSzE, symHi) - lPtrE);
+                ctx.candIdx[depth]   = startCi;
+                ctx.symEndArr[depth] = endCi;
+                ctx.symPruned[depth] += startCi + (lSzE - endCi);
+            }
             fresh = false;
         }
 
@@ -669,13 +801,11 @@ inline void backtrack_impl(EnumContext& ctx, Fn&& phi)
         {
             const uint32_t  bestU     = ctx.dynOrder[depth];
             const VertexID* lPtr      = ctx.candPtr(bestU, ctx.candTop[bestU] - 1);
-            const uint32_t  lSz       = ctx.candSzFlat[bestU * (ctx.qn + 1)
-                                                        + ctx.candTop[bestU] - 1];
             uint32_t* const nbrBuf    = ctx.nbrBufs + (size_t)depth * 64;
             const uint32_t  nbrCnt    = ctx.nbrCnts[depth];
             bool            descended = false;
 
-            while (ctx.candIdx[depth] < lSz) {
+            while (ctx.candIdx[depth] < ctx.symEndArr[depth]) {
                 if (ctx.matchCount >= ctx.matchLimit) return;
                 const VertexID v = lPtr[ctx.candIdx[depth]++];
                 if (ctx.inMapping[v]) continue;
@@ -764,12 +894,19 @@ inline void backtrack_impl(EnumContext& ctx, Fn&& phi)
                         accepted = (ctx.decisionTree.nodes[0] == NS_TRUE);
                     }
                     if (accepted) {
-                        ++ctx.matchCount;
-                        // printAnswer(ctx);
-                        if (ctx.matchTrie) {
-                            ctx.matchTrie->insert(ctx.matched, ctx.qn);
-                        } else if (ctx.onMatch) {
-                            ctx.onMatch(ctx.matched, ctx.dynOrder, ctx.qn);
+                        if (ctx.autGenerators.empty()) {
+                            /* No symmetry breaking — one canonical match = one result. */
+                            ++ctx.matchCount;
+                            if (ctx.matchTrie) {
+                                ctx.matchTrie->insert(ctx.matched, ctx.qn);
+                            } else if (ctx.onMatch) {
+                                ctx.onMatch(ctx.matched, ctx.dynOrder, ctx.qn);
+                            }
+                        } else {
+                            /* Symmetry breaking active — BFS-expand the canonical
+                             * match to its full orbit under the automorphism group,
+                             * counting and reporting every equivalent match.         */
+                            generateMatchOrbit(ctx, ctx.autGenerators);
                         }
                     }
                     ctx.mapping[bestU] = UINT32_MAX;
