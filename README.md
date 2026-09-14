@@ -128,6 +128,14 @@ You can also build your own client applications. Since this project is compatibl
 > This step is only required if you need **document ingestion and HippoRAG retrieval**.
 > Skip this step if you only use the Gremlin server or web client.
 
+Documents:
+
+- [Pipeline overview (write + retrieve)](docs/graph-retrieval-intro.md)
+- [Papers by stage](docs/graph-retrieval-papers.md)
+- [Operator contracts](docs/graph-retrieval-contracts.md)
+- [Recall / Expand semantics](docs/graph-retrieval-recall-expand.md)
+- [Storage and embedding](docs/graph-retrieval-storage-embedding.md)
+
 Temp files and embedding models are stored in the project `.cache/` directory automatically.
 
 **Prerequisites**: Python 3.10+ and [Ollama](https://ollama.com/). Complete steps 1 and 3 first.

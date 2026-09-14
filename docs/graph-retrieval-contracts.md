@@ -4,8 +4,9 @@
 
 - [`graph-retrieval-recall-expand.md`](graph-retrieval-recall-expand.md)
 - [`graph-retrieval-storage-embedding.md`](graph-retrieval-storage-embedding.md)
+- [`graph-retrieval-papers.md`](graph-retrieval-papers.md)（按阶段列文献）
 
-实现、评测或 Fluent API 与本文冲突时，以本文为准，并同步改代码与上述两份设计。新增算子必须先补本文件的 I/O 行，再写实现。
+实现、评测或 Fluent API 与本文冲突时，以本文为准，并同步改代码与上述两份设计。方案综述（写入 / 检索两条线）见 [`graph-retrieval-intro.md`](graph-retrieval-intro.md)，与本文冲突时仍以本文为准。新增算子必须先补本文件的 I/O 行，再写实现。
 
 ---
 

@@ -1,6 +1,6 @@
 # MonacGraph GraphRAG 图检索流水线实施方案
 
-**类型、阶段 I/O 与兼容矩阵以 [`graph-retrieval-contracts.md`](graph-retrieval-contracts.md) 为准。** 本文保留算子语义、优先级、验收标准与论文对照；与契约冲突时先改契约再改本文。
+**类型、阶段 I/O 与兼容矩阵以 [`graph-retrieval-contracts.md`](graph-retrieval-contracts.md) 为准。** 方案综述见 [`graph-retrieval-intro.md`](graph-retrieval-intro.md)。本文保留算子语义、优先级、验收标准与论文对照；与契约冲突时先改契约再改本文。代码是否落地见契约 §8，不以本文第 10 节里程碑是否写完为准。
 
 ## 1. 文档目标
 
@@ -39,7 +39,7 @@ Fusion 的内部操作为：
 - **Fuse**：合并不同检索分支的候选、排名和来源。
 - **Rerank**：可选地使用更精细的相关性与图结构信号重新排序。
 
-本文中的 API 用于定义目标语义，具体 Java 方法签名在接口设计评审后冻结。
+本文中的 API 用于定义目标语义。公开 Java 签名以契约为准。
 
 Passage 持久化、图元素双向关联、Lucene 索引和 Embedding 生成的实现见
 [`graph-retrieval-storage-embedding.md`](graph-retrieval-storage-embedding.md)。本文只使用其公开的 `ContentRef`、内容索引和向量空间接口。
@@ -1412,7 +1412,23 @@ AnswerResult answer = g.retrieve(query)
 
 ---
 
-## 10. 实施顺序
+## 10. 实施顺序与现状
+
+下列里程碑是设计时的实施顺序。**是否已落地以契约 §8 为准。**
+
+当前最小可运行闭环由 `retrieve(q).hippoRag().execute()` 提供（实体链接、加权 PPR、事实投影，再接 Budget / Evidence / Generation），**不依赖**里程碑 C 的 `neighbors()` / `boundedBfs()`。
+
+| 里程碑 | 状态 |
+|---|---|
+| A 公共类型 | 阶段类型已在契约与代码中定义；逐步统计未作为独立模块完成 |
+| B Recall P0 | `textRecall()`、`vectorRecall()` 已落地；`entityLink()` 走 HippoRAG 1 路径 |
+| C Expand P0 | `neighbors()`、`boundedBfs()` **未落地** |
+| D Prune P0 | **未落地** |
+| E P1 图检索 | `ppr()` 已在 HippoRAG 1 中落地；路径类算子未落地 |
+| F P2 研究策略 | **未落地** |
+| G Evidence 与 Generation | Budget / Evidence / `generate()` / `AnswerResult` 已落地 |
+
+未完成项仍按原顺序推进，条文保留如下。
 
 ### 里程碑 A：公共类型与可观测性
 
@@ -1474,6 +1490,8 @@ AnswerResult answer = g.retrieve(query)
 ---
 
 ## 11. 相关论文
+
+按写入 / 检索阶段整理的清单见 [`graph-retrieval-papers.md`](graph-retrieval-papers.md)。下文为实施方案中直接引用过的文献。
 
 1. **LEGO-GraphRAG: Modularizing Graph-based Retrieval-Augmented Generation for Design Space Exploration**, PVLDB 2025.  
    https://www.vldb.org/pvldb/vol18/p3269-cao.pdf

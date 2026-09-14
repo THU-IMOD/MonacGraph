@@ -111,17 +111,28 @@ retrieval.embedding.manageProcess=false
 
 ## 6. 当前接入 API
 
-`CommunityGraph`惰性创建并管理 `RetrievalServices`。Recall 的最小入口为：
+`CommunityGraph`惰性创建并管理 `RetrievalServices`。
+
+仅召回（不跑生成）：
 
 ```java
 List<ContentCandidate> results = graph.traversal()
     .retrieve("乔布斯与苹果公司有什么关系？")
-    .vectorRecall()
+    .textRecall()
     .topK(20)
     .executeRecall();
 ```
 
-`textRecall()`不需要启动 embedding 服务。完整的 Expand、Prune、Fusion、Budget、Evidence 和 Generation 将在该存储与索引接口之上继续实现。
+默认跑到回答：
+
+```java
+AnswerResult answer = graph.traversal()
+    .retrieve("乔布斯与苹果公司有什么关系？")
+    .hippoRag()
+    .execute();
+```
+
+`textRecall()`不需要 embedding 服务。`vectorRecall()` 与 `hippoRag()` 需要本机 embedding。通用 Expand（`neighbors()`、`boundedBfs()`）、Prune 与通用 Fusion 尚未实现，对照见契约 §8。
 
 ## 7. 故障与恢复
 
