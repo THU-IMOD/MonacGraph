@@ -1,5 +1,6 @@
 package db.monacgraph.app;
 
+import db.monacgraph.runtime.LocalRuntime;
 import org.apache.tinkerpop.gremlin.driver.Client;
 import org.apache.tinkerpop.gremlin.driver.Cluster;
 import org.apache.tinkerpop.gremlin.driver.ResultSet;
@@ -699,6 +700,7 @@ public class MonacGraphServer {
      * Main entry point
      */
     public static void main(String[] args) {
+        LocalRuntime.install();
         String configFile = "gremlin-server.yaml";
         if (args.length > 0) {
             configFile = args[0];

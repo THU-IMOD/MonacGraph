@@ -1,0 +1,5 @@
+fastapi>=0.115,<1
+sentence-transformers>=3.4,<6
+# Install CPU torch from https://download.pytorch.org/whl/cpu to avoid multi-GB CUDA wheels.
+torch>=2.5
+uvicorn[standard]>=0.34,<1

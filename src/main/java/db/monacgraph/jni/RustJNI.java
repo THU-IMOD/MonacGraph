@@ -1,5 +1,7 @@
 package db.monacgraph.jni;
 
+import db.monacgraph.runtime.LocalRuntime;
+
 import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -13,6 +15,7 @@ public class RustJNI {
 
     // Load native library on class initialization
     static {
+        LocalRuntime.install();
         try {
             // 1. Get the name of OS.
             String osName = System.getProperty("os.name").toLowerCase();

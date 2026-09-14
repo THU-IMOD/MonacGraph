@@ -1,5 +1,7 @@
 package db.monacgraph.so;
 
+import db.monacgraph.community.CommunityGraph;
+import db.monacgraph.retrieval.RetrievalPipelineBuilder;
 import org.apache.tinkerpop.gremlin.process.traversal.TraversalStrategies;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.structure.Graph;
@@ -84,6 +86,14 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
     /** Entry point for second-order subgraph pattern matching queries. */
     public SubgraphQueryBuilder Subgraph() {
         return new SubgraphQueryBuilder(this);
+    }
+
+    /** Entry point for GraphRAG retrieval pipelines. */
+    public RetrievalPipelineBuilder retrieve(String query) {
+        if (!(this.graph instanceof CommunityGraph communityGraph)) {
+            throw new IllegalStateException("retrieve() requires a CommunityGraph");
+        }
+        return new RetrievalPipelineBuilder(communityGraph.retrievalRuntime(), query);
     }
 
     /**

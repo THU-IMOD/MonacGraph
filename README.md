@@ -69,6 +69,8 @@ cd ..
 ### 3. Build Java Application
 Compile the Java project and package it into a JAR file.
 
+**Prerequisites**: JDK 17+ and Maven.
+
 ```bash
 mvn clean package
 ```
@@ -120,3 +122,48 @@ open http://localhost:5173/
 
 ### 6. Custom Usage
 You can also build your own client applications. Since this project is compatible with Apache TinkerPop, you can use the Gremlin query language to perform graph traversals and queries against the server.
+
+### 7. GraphRAG Ingestion and Retrieval (Optional)
+
+> This step is only required if you need **document ingestion and HippoRAG retrieval**.
+> Skip this step if you only use the Gremlin server or web client.
+
+Temp files and embedding models are stored in the project `.cache/` directory automatically.
+
+**Prerequisites**: Python 3.10+ and [Ollama](https://ollama.com/). Complete steps 1 and 3 first.
+
+```bash
+# 1. Start the local embedding service. Leave this terminal running.
+#    The first run creates embedding-service/.venv and downloads the model.
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File .\scripts\start-embedding.ps1
+# Linux
+bash scripts/start-embedding.sh
+# macOS
+bash scripts/start-embedding.sh
+
+# 2. In a new terminal, pull a chat model for extraction and answering
+ollama pull qwen3:0.6b
+
+# 3. Ingest the HotpotQA example and answer with HippoRAG
+#    Question: Were Scott Derrickson and Ed Wood of the same nationality?
+#    Use a new --db name each run (run ONLY one command for your OS)
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File .\scripts\run-smoke.ps1
+# Linux
+bash scripts/run-smoke.sh
+# macOS
+bash scripts/run-smoke.sh
+```
+
+You can also run the same HotpotQA example without the helper scripts:
+
+```bash
+java -cp target/Gremmunity-1.0-SNAPSHOT.jar db.monacgraph.ingestion.IngestionCli \
+  --db hotpotqa-demo \
+  --input data/hotpotqa-smoke/scott-derrickson-ed-wood.txt \
+  --extractor-url http://127.0.0.1:11434/v1/chat/completions \
+  --extractor-model qwen3:0.6b \
+  --embedding-uri http://127.0.0.1:8099/ \
+  --query "Were Scott Derrickson and Ed Wood of the same nationality?"
+```

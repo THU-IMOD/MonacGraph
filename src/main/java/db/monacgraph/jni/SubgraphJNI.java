@@ -1,5 +1,6 @@
 package db.monacgraph.jni;
 
+import db.monacgraph.runtime.LocalRuntime;
 import db.monacgraph.so.SubgraphPhiCallback;
 
 import java.io.File;
@@ -29,6 +30,7 @@ public class SubgraphJNI {
     private static final boolean AVAILABLE;
 
     static {
+        LocalRuntime.install();
         boolean loaded = false;
         try {
             String osName = System.getProperty("os.name").toLowerCase();

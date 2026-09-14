@@ -76,7 +76,36 @@ coverage/
 # 虚拟机崩溃日志
 hs_err_pid*
 replay_pid*
+
+# 原生库（按 README 在本机编译后拷贝，不入库）
 workspace/
 *.dylib
 *.dll
 *.so
+*.exe
+*.pdb
+
+# 本地 JNI 图数据库（已跟踪的 data/example.graph 等不受影响）
+/data/*.graph
+
+# HotpotQA 示例的运行输出（输入文本保留）
+/data/hotpotqa-smoke/answer.txt
+/data/hotpotqa-smoke/graph.txt
+
+# 文档导出 / 本地二进制
+*.pdf
+
+# Node
+node_modules/
+
+# 本地密钥
+.env
+.env.*
+
+# Python embedding service
+__pycache__/
+*.py[cod]
+.venv/
+.models/
+.cache/
+.pytest_cache/

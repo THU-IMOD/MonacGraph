@@ -6,6 +6,23 @@ import db.monacgraph.reader.VertexPropertyCsvReader;
 import db.monacgraph.reader.VertexPropertyJsonReader;
 import db.monacgraph.serialize.IdCodec;
 import db.monacgraph.jni.RustJNI;
+import db.monacgraph.ingestion.IngestionConfig;
+import db.monacgraph.ingestion.IngestionCoordinator;
+import db.monacgraph.ingestion.IngestionServices;
+import db.monacgraph.retrieval.RetrievalConfig;
+import db.monacgraph.retrieval.RetrievalRuntime;
+import db.monacgraph.retrieval.RetrievalServices;
+import db.monacgraph.retrieval.generation.AnswerGenerator;
+import db.monacgraph.retrieval.generation.OpenAiCompatibleAnswerGenerator;
+import db.monacgraph.retrieval.graph.CooccurrenceNeighborhood;
+import db.monacgraph.retrieval.graph.TinkerPopNeighborhood;
+import db.monacgraph.retrieval.graph.UnionNeighborhood;
+import db.monacgraph.retrieval.graph.WeightedGraphView;
+import db.monacgraph.retrieval.hipporag.HippoRagGraph;
+import db.monacgraph.retrieval.hipporag.HippoRagIndex;
+import db.monacgraph.retrieval.hipporag.OpenAiCompatibleQueryNer;
+import db.monacgraph.retrieval.linking.CatalogEntityIndex;
+import db.monacgraph.runtime.LocalRuntime;
 import db.monacgraph.so.SecondOrderTraversalSource;
 import db.monacgraph.reader.*;
 import org.apache.commons.configuration2.Configuration;
@@ -33,6 +50,12 @@ public class CommunityGraph implements Graph, Serializable {
     // Native graph handle for JNI operations
     private long graphHandle;
     private final RustJNI jni = new RustJNI();
+    private String graphName;
+    private transient RetrievalConfig retrievalConfig;
+    private transient RetrievalServices retrievalServices;
+    private transient IngestionConfig ingestionConfig;
+    private transient IngestionServices ingestionServices;
+    private transient AnswerGenerator answerGenerator;
 
     /**
      * Get JNI bridge instance for native LSM-Community operations
@@ -58,6 +81,7 @@ public class CommunityGraph implements Graph, Serializable {
      * @return Initialized CommunityGraph instance
      */
     public static CommunityGraph open(final Configuration configuration) {
+        LocalRuntime.install();
         // Extract configuration parameters with defaults
         String dbName = configuration.getString("db.name", "my_database");
         String storagePath = configuration.getString("storage.path", "./data");
@@ -71,15 +95,23 @@ public class CommunityGraph implements Graph, Serializable {
         // Create graph data file
         File graphFile = new File(parentDir, dbName + ".graph");
         try {
-            boolean isSuccess = graphFile.createNewFile();
-            if (!isSuccess) {
-                System.out.println(graphFile.getAbsolutePath() + " failed to create graph file");
+            boolean isNew = graphFile.createNewFile();
+            if (isNew || graphFile.length() == 0) {
+                try (BufferedWriter writer = new BufferedWriter(
+                        new OutputStreamWriter(new FileOutputStream(graphFile), StandardCharsets.UTF_8))) {
+                    writer.write("t 0 0");
+                    writer.newLine();
+                }
             }
         } catch (IOException e) {
             throw new RuntimeException("Failed to create graph file: " + graphFile.getAbsolutePath(), e);
         }
 
-        return new CommunityGraph(dbName);
+        String actualDbName = normalizeDbName(dbName);
+        return new CommunityGraph(
+                actualDbName,
+                RetrievalConfig.from(configuration, actualDbName),
+                IngestionConfig.from(configuration));
     }
 
     /**
@@ -137,12 +169,79 @@ public class CommunityGraph implements Graph, Serializable {
      * @param dbName Name/path of the graph database (uses default if null/empty)
      */
     public CommunityGraph(final String dbName) {
-        // Use default name if input is invalid, trim whitespace
-        final String actualDbName = (dbName == null || dbName.trim().isEmpty())
-                ? "lsm-data"
-                : dbName.trim();
+        this(normalizeDbName(dbName), null, null);
+    }
 
-        graphHandle = openDB(actualDbName);
+    private CommunityGraph(
+            String dbName,
+            RetrievalConfig retrievalConfig,
+            IngestionConfig ingestionConfig) {
+        this.graphName = dbName;
+        this.retrievalConfig = retrievalConfig == null
+                ? RetrievalConfig.from(new BaseConfiguration(), dbName)
+                : retrievalConfig;
+        this.ingestionConfig = ingestionConfig == null
+                ? IngestionConfig.from(new BaseConfiguration())
+                : ingestionConfig;
+        graphHandle = openDB(dbName);
+    }
+
+    private static String normalizeDbName(String dbName) {
+        return dbName == null || dbName.trim().isEmpty() ? "lsm-data" : dbName.trim();
+    }
+
+    /** Lazily opens passage, text and vector retrieval resources for this graph. */
+    public synchronized RetrievalServices getRetrievalServices() {
+        if (retrievalServices == null) {
+            if (retrievalConfig == null) {
+                retrievalConfig = RetrievalConfig.from(new BaseConfiguration(), graphName);
+            }
+            retrievalServices = RetrievalServices.open(retrievalConfig);
+        }
+        return retrievalServices;
+    }
+
+    /** Lazily creates the durable document ingestion pipeline for this graph. */
+    public synchronized IngestionCoordinator ingestion() {
+        if (ingestionServices == null) {
+            if (ingestionConfig == null) {
+                ingestionConfig = IngestionConfig.from(new BaseConfiguration());
+            }
+            ingestionServices = IngestionServices.open(
+                    this, getRetrievalServices(), retrievalConfig, ingestionConfig);
+        }
+        return ingestionServices.coordinator();
+    }
+
+    public synchronized RetrievalRuntime retrievalRuntime() {
+        getRetrievalServices();
+        ingestion();
+        IngestionConfig config = ingestionConfig != null
+                ? ingestionConfig
+                : IngestionConfig.from(new BaseConfiguration());
+        if (answerGenerator == null) {
+            answerGenerator = new OpenAiCompatibleAnswerGenerator(
+                    config.extractorEndpoint(),
+                    config.extractorModel(),
+                    config.extractorApiKey(),
+                    config.extractorTimeout());
+        }
+        HippoRagIndex hippoIndex = ingestionServices.hippoRagIndex();
+        return new RetrievalRuntime(
+                retrievalServices,
+                new CatalogEntityIndex(ingestionServices.entityCatalog()),
+                hippoIndex == null
+                        ? new UnionNeighborhood(
+                                new TinkerPopNeighborhood(this),
+                                new CooccurrenceNeighborhood(retrievalServices.contentStore()))
+                        : new WeightedGraphView(new HippoRagGraph(hippoIndex)),
+                answerGenerator,
+                hippoIndex,
+                new OpenAiCompatibleQueryNer(
+                        config.extractorEndpoint(),
+                        config.extractorModel(),
+                        config.extractorApiKey(),
+                        config.extractorTimeout()));
     }
 
     /**
@@ -228,6 +327,9 @@ public class CommunityGraph implements Graph, Serializable {
                 ? "lsm-data"
                 : dbName.trim();
 
+        this.graphName = actualDbName;
+        this.retrievalConfig = RetrievalConfig.from(new BaseConfiguration(), actualDbName);
+        this.ingestionConfig = IngestionConfig.from(new BaseConfiguration());
         graphHandle = openDB(actualDbName);
     }
 
@@ -537,8 +639,35 @@ public class CommunityGraph implements Graph, Serializable {
         if (graphHandle == -1) {
             return;
         }
-        closeDB(graphHandle);
-        graphHandle = -1;
+        RuntimeException failure = null;
+        try {
+            if (ingestionServices != null) {
+                ingestionServices.close();
+                ingestionServices = null;
+            }
+        } catch (RuntimeException e) {
+            failure = e;
+        }
+        try {
+            if (retrievalServices != null) {
+                retrievalServices.close();
+                retrievalServices = null;
+            }
+        } catch (RuntimeException e) {
+            if (failure == null) failure = e;
+            else failure.addSuppressed(e);
+        }
+        try {
+            closeDB(graphHandle);
+        } catch (RuntimeException e) {
+            if (failure == null) failure = e;
+            else failure.addSuppressed(e);
+        } finally {
+            graphHandle = -1;
+        }
+        if (failure != null) {
+            throw failure;
+        }
     }
 
     /**

@@ -255,10 +255,7 @@ pub extern "system" fn Java_db_monacgraph_jni_RustJNI_getEdgeHandleById(
     // Get internal ID (only lookup, don't create)
     match graph.edge_id_mapper.get_inner_id(&outer_id_bytes) {
         Some(inner_id) => inner_id as jlong,
-        None => {
-            let _ = env.throw_new("java/util/NoSuchElementException", "Vertex not found");
-            -1
-        }
+        None => -1,
     }
 }
 
