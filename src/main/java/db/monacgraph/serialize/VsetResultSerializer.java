@@ -3,126 +3,152 @@ package db.monacgraph.serialize;
 import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * Serializer for Vset query results
- * Converts Set<Set<Vertex>> to JSON-friendly format for web visualization
- * Optimized: Preprocess all vertices/edges first to avoid repeated edge extraction
+ * Serializer for Vset / subgraph query results.
+ * Converts result pieces to a JSON-friendly {@code VsetResult} map for the Web UI.
  */
 public class VsetResultSerializer {
 
     /**
-     * Serialize Vset result to Map format with induced subgraph edges
-     * Optimized version: Preprocess all vertices and edges first to avoid repeated traversal
+     * One subgraph: vertices plus the caller-supplied edges.
+     */
+    public static Map<String, Object> serialize(Collection<Vertex> vertices, Collection<Edge> edges) {
+        return serialize(ResultSubgraph.of(vertices, edges));
+    }
+
+    /**
+     * One result piece.
+     */
+    public static Map<String, Object> serialize(ResultSubgraph subgraph) {
+        return serializeSubgraphs(List.of(subgraph));
+    }
+
+    /**
+     * Same as {@link #serializeSubgraphs(List)}.
+     */
+    public static Map<String, Object> serialize(List<ResultSubgraph> subgraphs) {
+        return serializeSubgraphs(subgraphs);
+    }
+
+    /**
+     * Vertex sets only: each inner set is drawn as its <em>induced</em> subgraph
+     * (every edge with both ends in the set). Used by BFS, WCC, Community, Vset.
      */
     public static Map<String, Object> serialize(Set<Set<Vertex>> vsetResult) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("type", "VsetResult");
-
-        // ========== Step 1: Global Preprocessing - Collect all unique vertices and corresponding edges ==========
-        // 1. Collect all unique vertices (deduplication)
-        Set<Vertex> allVertices = new HashSet<>();
-        for (Set<Vertex> vertexSet : vsetResult) {
-            allVertices.addAll(vertexSet);
+        List<ResultSubgraph> subgraphs = new ArrayList<>();
+        if (vsetResult != null) {
+            for (Set<Vertex> vertexSet : vsetResult) {
+                subgraphs.add(ResultSubgraph.induced(vertexSet));
+            }
         }
+        return serializeSubgraphs(subgraphs);
+    }
 
-        // 2. Extract all associated edges of unique vertices at once and cache them (key: edge ID, value: edge data)
-        Map<Object, EdgeData> allEdgeCache = new HashMap<>();
-        Set<Object> processedEdgeIds = new HashSet<>();
-        for (Vertex v : allVertices) {
-            Iterator<Edge> edgeIterator = v.edges(Direction.OUT);
-            while (edgeIterator.hasNext()) {
-                Edge edge = edgeIterator.next();
-                Object edgeId = edge.id();
-                if (processedEdgeIds.contains(edgeId)) {
+    /**
+     * Web 入口：一块或多块 {@link ResultSubgraph}。
+     * 各算子算出点、边之后收成列表，交给本方法即可。
+     */
+    public static Map<String, Object> serializeSubgraphs(List<ResultSubgraph> subgraphs) {
+        Map<Object, Map<String, Object>> vertexCache = new HashMap<>();
+        Map<Object, Map<String, Object>> edgeCache = new HashMap<>();
+        List<Map<String, Object>> subsets = new ArrayList<>();
+
+        if (subgraphs != null) {
+            for (ResultSubgraph subgraph : subgraphs) {
+                if (subgraph == null) {
                     continue;
                 }
+                List<Vertex> vertices = subgraph.vertices();
+                List<Edge> edges = subgraph.induced() ? inducedEdges(vertices) : subgraph.edges();
 
-                // Encapsulate edge data (including endpoint IDs, properties, etc.)
-                EdgeData edgeData = new EdgeData();
-                edgeData.edgeId = edgeId;
-                edgeData.label = edge.label();
-                edgeData.outId = edge.outVertex().id();
-                edgeData.inId = edge.inVertex().id();
-
-                // Extract edge properties
-                Map<String, Object> properties = new LinkedHashMap<>();
-                edge.keys().forEach(key -> {
-                    properties.put(key, edge.property(key).value());
-                });
-                edgeData.properties = properties;
-
-                allEdgeCache.put(edgeId, edgeData);
-                processedEdgeIds.add(edgeId);
-            }
-        }
-
-        // ========== Step 2: Process each subset and filter edges from the cache ==========
-        List<Map<String, Object>> subsets = new ArrayList<>();
-        for (Set<Vertex> vertexSet : vsetResult) {
-            Map<String, Object> subset = new LinkedHashMap<>();
-
-            // Extract vertex data and vertex ID set of the current subset
-            List<Map<String, Object>> vertices = new ArrayList<>();
-            Set<Object> vertexIds = new HashSet<>();
-            for (Vertex v : vertexSet) {
-                Object id = v.id();
-                vertexIds.add(id);
-
-                Map<String, Object> vertexData = new LinkedHashMap<>();
-                vertexData.put("id", id);
-                vertexData.put("label", v.label());
-
-                // Extract vertex properties
-                Map<String, Object> properties = new LinkedHashMap<>();
-                v.keys().forEach(key -> {
-                    properties.put(key, v.property(key).value());
-                });
-                vertexData.put("properties", properties);
-
-                vertices.add(vertexData);
-            }
-
-            // Filter the induced subgraph edges of the current subset from the global edge cache
-            // (both endpoints are within the subset)
-            List<Map<String, Object>> edges = new ArrayList<>();
-            for (EdgeData edgeData : allEdgeCache.values()) {
-                if (vertexIds.contains(edgeData.outId) && vertexIds.contains(edgeData.inId)) {
-                    // Convert to the format required by the frontend
-                    Map<String, Object> edgeMap = new LinkedHashMap<>();
-                    edgeMap.put("id", edgeData.edgeId);
-                    edgeMap.put("label", edgeData.label);
-                    edgeMap.put("source", edgeData.outId);
-                    edgeMap.put("target", edgeData.inId);
-                    edgeMap.put("properties", edgeData.properties);
-                    edges.add(edgeMap);
+                List<Map<String, Object>> vertexMaps = new ArrayList<>(vertices.size());
+                for (Vertex v : vertices) {
+                    vertexMaps.add(cachedVertex(v, vertexCache));
                 }
-            }
 
-            subset.put("vertices", vertices);
-            subset.put("edges", edges);
-            subset.put("size", vertices.size());
-            subsets.add(subset);
+                List<Map<String, Object>> edgeMaps = new ArrayList<>();
+                Set<Object> seenEdgeIds = new HashSet<>();
+                for (Edge e : edges) {
+                    if (e == null || !seenEdgeIds.add(e.id())) {
+                        continue;
+                    }
+                    edgeMaps.add(cachedEdge(e, edgeCache));
+                }
+
+                Map<String, Object> subset = new LinkedHashMap<>();
+                subset.put("vertices", vertexMaps);
+                subset.put("edges", edgeMaps);
+                subset.put("size", vertexMaps.size());
+                subsets.add(subset);
+            }
         }
 
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("type", "VsetResult");
         result.put("subsets", subsets);
         result.put("totalCount", subsets.size());
         return result;
     }
 
-    /**
-     * Helper class: Cache core edge data to avoid repeated parsing
-     */
-    private static class EdgeData {
-        Object edgeId;
-        String label;
-        Object outId;
-        Object inId;
-        Map<String, Object> properties;
+    private static List<Edge> inducedEdges(List<Vertex> vertices) {
+        Set<Object> vertexIds = new HashSet<>();
+        for (Vertex v : vertices) {
+            vertexIds.add(v.id());
+        }
+        List<Edge> edges = new ArrayList<>();
+        Set<Object> seen = new HashSet<>();
+        for (Vertex v : vertices) {
+            Iterator<Edge> it = v.edges(Direction.OUT);
+            while (it.hasNext()) {
+                Edge edge = it.next();
+                if (!seen.add(edge.id())) {
+                    continue;
+                }
+                if (vertexIds.contains(edge.outVertex().id()) && vertexIds.contains(edge.inVertex().id())) {
+                    edges.add(edge);
+                }
+            }
+        }
+        return edges;
     }
 
-    // ========== The following are the original compatible methods, unchanged ==========
+    private static Map<String, Object> cachedVertex(Vertex v, Map<Object, Map<String, Object>> cache) {
+        return cache.computeIfAbsent(v.id(), id -> {
+            Map<String, Object> vertexData = new LinkedHashMap<>();
+            vertexData.put("id", v.id());
+            vertexData.put("label", v.label());
+            Map<String, Object> properties = new LinkedHashMap<>();
+            v.keys().forEach(key -> properties.put(key, v.property(key).value()));
+            vertexData.put("properties", properties);
+            return vertexData;
+        });
+    }
+
+    private static Map<String, Object> cachedEdge(Edge edge, Map<Object, Map<String, Object>> cache) {
+        return cache.computeIfAbsent(edge.id(), id -> {
+            Map<String, Object> edgeMap = new LinkedHashMap<>();
+            edgeMap.put("id", edge.id());
+            edgeMap.put("label", edge.label());
+            edgeMap.put("source", edge.outVertex().id());
+            edgeMap.put("target", edge.inVertex().id());
+            Map<String, Object> properties = new LinkedHashMap<>();
+            edge.keys().forEach(key -> properties.put(key, edge.property(key).value()));
+            edgeMap.put("properties", properties);
+            return edgeMap;
+        });
+    }
+
     public static Map<String, Object> serializeVerticesOnly(Set<Set<Vertex>> vsetResult) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", "VsetResult");
@@ -143,9 +169,7 @@ public class VsetResultSerializer {
                 props.put("id", id);
                 props.put("label", v.label());
 
-                v.keys().forEach(key -> {
-                    props.put(key, v.property(key).value());
-                });
+                v.keys().forEach(key -> props.put(key, v.property(key).value()));
 
                 vertexProperties.put(id, props);
             }
@@ -164,31 +188,8 @@ public class VsetResultSerializer {
     }
 
     /**
-     * Serialize subgraph match results for web visualization.
-     *
-     * Unlike serialize(), this method only includes edges that correspond to
-     * query graph edges, not all edges in the induced subgraph.
-     *
-     * <p>All data is passed in pre-built form from SubgraphQueryBuilder:
-     * <ul>
-     *   <li>{@code rawMatches} — int index lists straight from JNI decoding,
-     *       no Vertex objects created yet</li>
-     *   <li>{@code indexToVertex} — plain array for O(1) index→Vertex lookup</li>
-     *   <li>{@code edgeIndex} — flat long-keyed HashMap built during the single
-     *       graph traversal in writeDataGraph(); values are pre-serialized edge Maps</li>
-     * </ul>
-     * No graph traversal is performed here.
-     *
-     * @param rawMatches     List of matches as raw int index lists; index i in each
-     *                       inner list is the data-graph index of the vertex matched
-     *                       to query vertex i
-     * @param queryEdges     Query graph edges as {u, v} int pairs (query vertex indices)
-     * @param indexToVertex  Array mapping 0-based data-graph index → Vertex
-     * @param edgeIndex      Pre-built edge index keyed by
-     *                       {@code (long) srcIdx << 32 | dstIdx}; values are
-     *                       Edge references — serialized on demand so that only
-     *                       edges that appear in a match are ever serialized
-     * @return Map containing serialized Vset result ready for web display
+     * Subgraph matcher: each match is a copy of the query graph's edges,
+     * not the induced subgraph on the matched vertices.
      */
     public static Map<String, Object> serializeSubgraph(
             List<List<Integer>> rawMatches,
@@ -196,74 +197,33 @@ public class VsetResultSerializer {
             Vertex[] indexToVertex,
             Map<Long, Edge> edgeIndex) {
 
-        // ── Step 1: Collect unique vertex indices across all matches ──────
-        Set<Integer> uniqueIndices = new HashSet<>();
-        for (List<Integer> match : rawMatches)
-            uniqueIndices.addAll(match);
-
-        // ── Step 2: Pre-serialize vertex data once, reuse across all matches ─
-        Map<Integer, Map<String, Object>> vertexDataCache = new HashMap<>();
-        for (int idx : uniqueIndices) {
-            Vertex v = indexToVertex[idx];
-            Map<String, Object> vertexData = new LinkedHashMap<>();
-            vertexData.put("id",    v.id());
-            vertexData.put("label", v.label());
-            Map<String, Object> props = new LinkedHashMap<>();
-            v.keys().forEach(key -> props.put(key, v.property(key).value()));
-            vertexData.put("properties", props);
-            vertexDataCache.put(idx, vertexData);
-        }
-
-        // ── Step 3: Assemble subsets — array lookup + long-keyed edge lookup ─
-        List<Map<String, Object>> subsets = new ArrayList<>();
-
-        for (List<Integer> match : rawMatches) {
-            List<Map<String, Object>> vertices = new ArrayList<>(match.size());
-            for (int idx : match)
-                vertices.add(vertexDataCache.get(idx));
-
-            List<Map<String, Object>> edges = new ArrayList<>();
-            Set<Object> seenEdgeIds = new HashSet<>();
-
-            for (int[] qEdge : queryEdges) {
-                int srcIdx = match.get(qEdge[0]);
-                int dstIdx = match.get(qEdge[1]);
-
-                // Try srcIdx→dstIdx then dstIdx→srcIdx (undirected query edge)
-                Edge edge = edgeIndex.get(edgeKey(srcIdx, dstIdx));
-                if (edge == null)
-                    edge = edgeIndex.get(edgeKey(dstIdx, srcIdx));
-                if (edge == null) continue;
-
-                Object edgeId = edge.id();
-                if (seenEdgeIds.contains(edgeId)) continue;
-                seenEdgeIds.add(edgeId);
-
-                // Serialize on demand — only edges that appear in a match
-                Map<String, Object> edgeMap = new LinkedHashMap<>();
-                edgeMap.put("id",     edgeId);
-                edgeMap.put("label",  edge.label());
-                edgeMap.put("source", edge.outVertex().id());
-                edgeMap.put("target", edge.inVertex().id());
-                Map<String, Object> eProps = new LinkedHashMap<>();
-                final Edge matchedEdge = edge;
-                matchedEdge.keys().forEach(key -> eProps.put(key, matchedEdge.property(key).value()));
-                edgeMap.put("properties", eProps);
-                edges.add(edgeMap);
+        List<ResultSubgraph> subgraphs = new ArrayList<>();
+        if (rawMatches != null) {
+            for (List<Integer> match : rawMatches) {
+                List<Vertex> vertices = new ArrayList<>(match.size());
+                for (int idx : match) {
+                    vertices.add(indexToVertex[idx]);
+                }
+                List<Edge> edges = new ArrayList<>();
+                Set<Object> seenEdgeIds = new HashSet<>();
+                if (queryEdges != null) {
+                    for (int[] qEdge : queryEdges) {
+                        int srcIdx = match.get(qEdge[0]);
+                        int dstIdx = match.get(qEdge[1]);
+                        Edge edge = edgeIndex.get(edgeKey(srcIdx, dstIdx));
+                        if (edge == null) {
+                            edge = edgeIndex.get(edgeKey(dstIdx, srcIdx));
+                        }
+                        if (edge == null || !seenEdgeIds.add(edge.id())) {
+                            continue;
+                        }
+                        edges.add(edge);
+                    }
+                }
+                subgraphs.add(ResultSubgraph.of(vertices, edges));
             }
-
-            Map<String, Object> subset = new LinkedHashMap<>();
-            subset.put("vertices", vertices);
-            subset.put("edges",    edges);
-            subset.put("size",     vertices.size());
-            subsets.add(subset);
         }
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("type",       "VsetResult");
-        result.put("subsets",    subsets);
-        result.put("totalCount", subsets.size());
-        return result;
+        return serializeSubgraphs(subgraphs);
     }
 
     /**

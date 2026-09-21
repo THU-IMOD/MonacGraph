@@ -120,3 +120,7 @@ open http://localhost:5173/
 
 ### 6. Custom Usage
 You can also build your own client applications. Since this project is compatible with Apache TinkerPop, you can use the Gremlin query language to perform graph traversals and queries against the server.
+
+Graph operator tasks (problem definition and required `g` API):
+
+- [图算子实现任务](docs/operator-assignment.md)

@@ -21,7 +21,8 @@ scriptEngines: {
           org.apache.tinkerpop.gremlin.structure.T,
           db.monacgraph.community.CommunityGraph,
           db.monacgraph.so.SecondOrderTraversalSource,
-          db.monacgraph.serialize.VsetResultSerializer
+          db.monacgraph.serialize.VsetResultSerializer,
+          db.monacgraph.serialize.ResultSubgraph
         ],
         methodImports: [java.lang.Math#*]
       },
