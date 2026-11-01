@@ -123,4 +123,5 @@ You can also build your own client applications. Since this project is compatibl
 
 Graph operator tasks (problem definition and required `g` API):
 
+- [MonacGraph 架构、Gremlin 与算子开发速览](docs/architecture-gremlin-operators.md)
 - [图算子实现任务](docs/operator-assignment.md)

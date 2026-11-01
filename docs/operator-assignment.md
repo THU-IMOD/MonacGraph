@@ -1,4 +1,4 @@
-# 图算子实现任务
+# 任务一：图算子实现
 
 ## 任务引入
 
@@ -235,3 +235,57 @@ g.PCST().prize(vertexPrizes).cost(edgeCosts).execute();
 ```
 
 论文：[G-Retriever](https://proceedings.neurips.cc/paper_files/paper/2024/file/efaf1c9726648c8ba363a5c927440529-Paper-Conference.pdf)（NeurIPS 2024）。
+
+---
+
+# 任务二：替换 TinkerPop 框架
+
+## 任务引入
+
+MonacGraph 当前使用 TinkerPop 的图模型和 Gremlin 查询接口：`CommunityGraph`、`CommunityVertex`、`CommunityEdge` 等类实现 TinkerPop 接口，`SecondOrderTraversalSource` 继承 `GraphTraversalSource`，服务端和网页通过 Gremlin 执行查询。底层数据仍由 LSM-Community 存储。任务目标是用项目自己的图接口、查询执行和服务接口承接这些能力，使系统运行时不再依赖 TinkerPop。
+
+任务一中的 `g.KHop(...)` 等写法是**当前接口**；任务二替换框架时可以改成新的调用形式，但相同输入应得到相同的点集、路径或子图，并给出新旧调用对照。不要求重新实现完整的 Gremlin 语言；需要覆盖仓库实际使用的查询和网页示例。
+
+本文规定**替换范围**与**验收结果**，内部类和协议如何设计由实现者决定。先列出依赖，再逐层替换，避免只删除 Maven 依赖而留下无法运行的查询入口。
+
+---
+
+## 一、需要替换的部分
+
+| 部分 | 当前实现位置 | 替换后需要具备的能力 |
+| ---- | ------------ | -------------------- |
+| 图模型与访问 | `src/main/java/db/monacgraph/community/` | 自己定义顶点、边、属性、方向和图访问接口；能通过现有 JNI 读写 LSM-Community 中的数据 |
+| 查询与算子入口 | `src/main/java/db/monacgraph/so/` | 不再继承 TinkerPop 的 traversal 类；保留现有命名算子及任务一新增算子的行为 |
+| 服务端与网页通信 | `MonacGraphServer`、`src/main/resources/gremlin-server.yaml`、`scripts/`、`web-client/src/services/gremlinClient.js` | 提供自己的查询请求和结果返回方式；网页仍能连接、执行示例并展示图结果 |
+| 结果序列化 | `src/main/java/db/monacgraph/serialize/` | 继续区分点集、诱导子图和明确选边的路径/子图；网页能正确解析顶点、边及属性 |
+
+LSM-Community 的 Rust 存储引擎和 JNI 是这次迁移的底层基础，不要求重写存储格式或图算法。子图匹配的 C++ 实现也不属于框架替换范围；它在 Java 侧的调用入口需要随新接口迁移。
+
+### 1. 先盘点依赖
+
+列出生产代码、构建文件、启动脚本和网页中直接使用 TinkerPop / Gremlin 的位置，并写一份**旧接口 → 新接口**对照。至少包括：按 id 取点、遍历点/边、取邻居、读取属性、提交查询、返回 Web 结果，以及任务一的命名算子。
+
+### 2. 再打通一条完整查询链路
+
+先让一条简单查询从网页走到自定义服务端、图访问接口、LSM-Community，再把结果返回网页。例如：读取全部顶点和边，或从一个顶点取一跳邻居。确认这条链路可用后，再迁移其余算子和数据操作。
+
+---
+
+## 二、交付
+
+1. 自研图模型、查询入口和服务接口，以及对应的接口说明与新旧调用对照；
+2. 迁移现有数据读取、写入与命名算子，并接入任务一实现的算子；
+3. 网页改用新服务接口，原有图展示、查询结果和 `executeForWeb()` 对应的子图展示能力可用；
+4. 移除构建和运行时的 TinkerPop / Gremlin 依赖，更新启动、构建和使用文档；
+5. 自动化测试与一个可复现的端到端演示。
+
+---
+
+## 三、验收
+
+- Maven 构建不再引入 TinkerPop 依赖；生产代码、启动配置和网页请求不再调用 Gremlin Server 或 TinkerPop API。
+- 用同一份示例图，在替换前后分别运行：读点/边及属性、添加点/边、`BFS`、`WCC`、`SCC`、`Community`，以及任务一已经完成的算子。结果的点、边和路径语义一致；允许返回顺序不同。
+- 网页能连接新服务、执行查询、显示普通图和一块/多块子图。路径结果只显示选中的边，诱导子图显示点集内部的全部边。
+- 子图匹配入口在新接口下仍可调用；无法迁移的原有调用必须在对照文档中列出原因和替代方式。
+
+任务二的工作量明显大于单个算子，适合拆成图接口、查询执行、服务与网页迁移几个协作部分；合并时以端到端链路和上述验收项为准。
