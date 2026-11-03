@@ -80,3 +80,11 @@ workspace/
 *.dylib
 *.dll
 *.so
+
+# 本地运行产物（不要提交）
+.cache/
+.models/
+transfer/
+web-client/node_modules/
+embedding-service/.venv/
+*.graph

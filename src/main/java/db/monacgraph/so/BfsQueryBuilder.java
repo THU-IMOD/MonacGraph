@@ -3,6 +3,7 @@ package db.monacgraph.so;
 import db.monacgraph.jni.RustJNI;
 import db.monacgraph.community.CommunityGraph;
 import db.monacgraph.community.CommunityVertex;
+import db.monacgraph.serialize.ResultSubgraph;
 import db.monacgraph.serialize.VsetResultSerializer;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
@@ -55,9 +56,6 @@ public class BfsQueryBuilder {
      * @return serialized BFS results in a web-friendly map structure
      */
     public Map<String, Object> executeForWeb() {
-        Set<Vertex> answer = execute();
-        Set<Set<Vertex>> result = new HashSet<>();
-        result.add(answer);
-        return VsetResultSerializer.serialize(result);
+        return VsetResultSerializer.serialize(ResultSubgraph.induced(execute()));
     }
 }

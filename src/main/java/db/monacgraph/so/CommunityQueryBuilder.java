@@ -3,6 +3,7 @@ package db.monacgraph.so;
 import db.monacgraph.jni.RustJNI;
 import db.monacgraph.community.CommunityGraph;
 import db.monacgraph.community.CommunityVertex;
+import db.monacgraph.serialize.ResultSubgraph;
 import db.monacgraph.serialize.VsetResultSerializer;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
@@ -97,8 +98,7 @@ public class CommunityQueryBuilder {
      * @return serialized community query results in a web-friendly format
      */
     public Map<String, Object> executeForWeb() {
-        Set<Set<Vertex>> result = execute();
-        return VsetResultSerializer.serialize(result);
+        return VsetResultSerializer.serialize(ResultSubgraph.inducedAll(execute()));
     }
 
     /**

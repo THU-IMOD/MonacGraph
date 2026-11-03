@@ -305,6 +305,11 @@ result.size()`
     query: 'g.Community().executeForWeb()'
   },
   {
+    title: 'KHop: Two-hop Neighborhood',
+    description: 'Vertices within 2 hops of vertex 1 (both directions), including the seed',
+    query: 'g.KHop(1).depth(2).executeForWeb()'
+  },
+  {
     title: 'BFS: Reachable Vertices',
     description: 'Find all vertices reachable from vertex 1',
     query: 'g.BFS(1).executeForWeb()'

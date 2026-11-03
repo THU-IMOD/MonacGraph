@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static db.monacgraph.so.GroovyGremlinQueryExecutor.VsetQuery;
+import db.monacgraph.serialize.ResultSubgraph;
 import db.monacgraph.serialize.VsetResultSerializer;
 
 /**
@@ -107,7 +108,6 @@ public class VertexSubsetQueryBuilder {
      * @throws IllegalArgumentException If query conditions are incomplete
      */
     public Map<String, Object> executeForWeb() {
-        Set<Set<Vertex>> result = execute();
-        return VsetResultSerializer.serialize(result);
+        return VsetResultSerializer.serialize(ResultSubgraph.inducedAll(execute()));
     }
 }

@@ -77,6 +77,11 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
         return new CommunityQueryBuilder(this, CommunityType.SCC);
     }
 
+    /** Undirected, bounded-hop neighborhood including the seed. */
+    public KHopQueryBuilder KHop(Object id) {
+        return new KHopQueryBuilder(this, id);
+    }
+
     public BfsQueryBuilder BFS(Object id) {
         return new BfsQueryBuilder(this, id);
     }
