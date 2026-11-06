@@ -9,7 +9,7 @@ import java.nio.file.StandardCopyOption;
  * JNI bridge for LSM-Community native operations
  * Loads the native library and exposes core graph storage operations via JNI
  */
-public class RustJNI {
+public class RustJNI implements db.monacgraph.storage.GraphStorage {
 
     // Load native library on class initialization
     static {

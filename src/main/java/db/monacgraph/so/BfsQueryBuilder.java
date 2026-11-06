@@ -1,6 +1,6 @@
 package db.monacgraph.so;
 
-import db.monacgraph.jni.RustJNI;
+import db.monacgraph.storage.GraphStorage;
 import db.monacgraph.community.CommunityGraph;
 import db.monacgraph.community.CommunityVertex;
 import db.monacgraph.serialize.VsetResultSerializer;
@@ -37,8 +37,8 @@ public class BfsQueryBuilder {
      * @return a set of vertices reachable from the starting vertex
      */
     public Set<Vertex> execute() {
-        RustJNI jni = new RustJNI();
         CommunityGraph graph = (CommunityGraph) g.getGraph();
+        GraphStorage jni = graph.getJni();
         long graphHandle = graph.handle();
         long vertexHandle = ((CommunityVertex)vertex).handle();
         long[] bfsAnswer = jni.getBfsVertices(graphHandle, vertexHandle);

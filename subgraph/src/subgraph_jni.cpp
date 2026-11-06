@@ -53,13 +53,17 @@ Java_db_monacgraph_jni_SubgraphJNI_nativeRunSubgraphMatch(
                                                "evaluate", "([I)Z");
     jobject   callbackRef   = env->NewGlobalRef(jPhiCallback);
 
+    struct JavaCallbackFailure { int unused = 0; };
     auto phi = [env, callbackRef, evaluateMid, k](const int* coords) -> bool {
         jintArray jCoords = env->NewIntArray(k);
+        if (!jCoords) throw JavaCallbackFailure{};
         env->SetIntArrayRegion(jCoords, 0, k,
                                reinterpret_cast<const jint*>(coords));
         jboolean result = env->CallBooleanMethod(callbackRef, evaluateMid,
                                                  jCoords);
+        bool failed = env->ExceptionCheck();
         env->DeleteLocalRef(jCoords);
+        if (failed) throw JavaCallbackFailure{};
         return static_cast<bool>(result);
     };
 
@@ -82,7 +86,12 @@ Java_db_monacgraph_jni_SubgraphJNI_nativeRunSubgraphMatch(
         matchResults.push_back(canonical);
     };
 
-    backtrack(ctx, phi);
+    try {
+        backtrack(ctx, phi);
+    } catch (const JavaCallbackFailure&) {
+        env->DeleteGlobalRef(callbackRef);
+        return nullptr; // Preserve the original Java exception.
+    }
     env->DeleteGlobalRef(callbackRef);
 
     /* ── 6. Encode results as flat jlong[] ───────────────────── *

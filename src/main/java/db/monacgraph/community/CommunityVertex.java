@@ -43,7 +43,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
                 (label == null) ? "vertex" : label,
                 graph);
         this.properties = new HashMap<>();
-        byte[] outerIdBytes = IdCodec.toBytes(id);
+        byte[] outerIdBytes = IdCodec.toBytes(this.id);
         vertexHandle = createVertex(graph.handle(), outerIdBytes, serialize());
     }
 
@@ -69,7 +69,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
             String key = keyObj.toString();
 
             // Filter hidden/empty keys
-            if (!Graph.Hidden.isHidden(key) && !key.isEmpty()) {
+            if (keyObj != T.id && keyObj != T.label && !Graph.Hidden.isHidden(key) && !key.isEmpty()) {
                 cleanedList.add(keyObj);
                 cleanedList.add(value);
             }
@@ -84,7 +84,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
         }
 
         // Persist vertex data
-        byte[] outerIdBytes = IdCodec.toBytes(id);
+        byte[] outerIdBytes = IdCodec.toBytes(this.id);
         vertexHandle = createVertex(graph.handle(), outerIdBytes, serialize());
     }
 
@@ -106,7 +106,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
             String key = keyObj.toString();
 
             // Filter hidden/empty keys
-            if (!Graph.Hidden.isHidden(key) && !key.isEmpty()) {
+            if (keyObj != T.id && keyObj != T.label && !Graph.Hidden.isHidden(key) && !key.isEmpty()) {
                 cleanedList.add(keyObj);
                 cleanedList.add(value);
             }
@@ -313,7 +313,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
     @Override
     public Iterator<Edge> edges(final Direction direction, final String... edgeLabels) {
         // Collect edge handles for specified direction(s)
-        List<Long> allEdgeHandles = new ArrayList<>();
+        Set<Long> allEdgeHandles = new LinkedHashSet<>();
         if (direction == Direction.OUT || direction == Direction.BOTH) {
             long[] outHandles = getEdgeHandleByVertex(graph.handle(), vertexHandle, 0);
             if (outHandles != null) {
@@ -330,14 +330,9 @@ public class CommunityVertex extends CommunityElement implements Vertex {
         // Convert handles to Edge objects
         List<Edge> edgeList = new ArrayList<>();
         for (long handle : allEdgeHandles) {
-            if (handle <= 0) continue;
+            if (handle == -1) continue;
 
-            Edge edge = null;
-            try {
-                edge = (Edge) new CommunityEdge(graph, handle);
-            } catch (Exception e) {
-                continue;
-            }
+            Edge edge = new CommunityEdge(graph, handle);
 
             if (edge != null) {
                 edgeList.add(edge);
@@ -393,8 +388,7 @@ public class CommunityVertex extends CommunityElement implements Vertex {
                 case BOTH:
                     final Vertex outV = edge.outVertex();
                     final Vertex inV = edge.inVertex();
-                    if (!outV.id().equals(this.id())) vertices.add(outV);
-                    if (!inV.id().equals(this.id())) vertices.add(inV);
+                    vertices.add(outV.id().equals(this.id()) ? inV : outV);
                     break;
                 default:
                     throw new IllegalArgumentException("Invalid direction: " + direction);

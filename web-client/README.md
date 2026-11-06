@@ -43,7 +43,7 @@
 - **BFS (Breadth-First Search)** - Find all vertices reachable from a starting vertex
 
 ### 🛠️ Data Management
-- **Upload Graph** - Import GraphML/GraphSON files
+- **Upload Graph** - Import `.graph` topology with optional CSV/JSON vertex and edge properties
 - **Create Test Data** - Generate sample graph (Alice, Bob, Charlie, David)
 - **Refresh Graph** - Reload current graph state
 - **Clear Graph** - Remove all vertices and edges

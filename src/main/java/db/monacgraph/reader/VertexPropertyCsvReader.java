@@ -31,7 +31,7 @@ public class VertexPropertyCsvReader {
      */
     public void readProperties(String fileName) throws IOException {
         // 1. Validate data directory
-        String dataDirPath = "data";
+        String dataDirPath = graph.dataDirectory().toString();
         File dataDir = new File(dataDirPath);
         if (!dataDir.exists()) {
             throw new IOException("Data directory does not exist: " + dataDir.getAbsolutePath());
@@ -86,7 +86,7 @@ public class VertexPropertyCsvReader {
         }
 
         // Get vertex instance
-        CommunityVertex vertex = new CommunityVertex(graph, vertexHandle);
+        CommunityVertex vertex = graph.vertexFromFileId(vertexHandle);
         if (vertex.id() == null) {
             throw new IllegalArgumentException("Vertex does not exist: " + vertexHandle);
         }

@@ -6,6 +6,10 @@ import db.monacgraph.reader.VertexPropertyCsvReader;
 import db.monacgraph.reader.VertexPropertyJsonReader;
 import db.monacgraph.serialize.IdCodec;
 import db.monacgraph.jni.RustJNI;
+import db.monacgraph.storage.GraphStorage;
+import db.monacgraph.storage.BwGraphStorage;
+import db.monacgraph.storage.LsmCommunityStorage;
+import db.monacgraph.reader.BwGraphImporter;
 import db.monacgraph.so.SecondOrderTraversalSource;
 import db.monacgraph.reader.*;
 import org.apache.commons.configuration2.Configuration;
@@ -15,6 +19,8 @@ import org.apache.tinkerpop.gremlin.structure.*;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -31,14 +37,30 @@ public class CommunityGraph implements Graph, Serializable {
     private final Features features = new LsmGraphFeatures();
 
     // Native graph handle for JNI operations
-    private long graphHandle;
-    private final RustJNI jni = new RustJNI();
+    private volatile long graphHandle = -1;
+    private String databaseName;
+    private final GraphStorage jni;
+    private final BaseConfiguration config = new BaseConfiguration();
+    private final boolean bwGraph;
+    private static final Object LIFECYCLE = new Object();
+    private static final Map<Path, Integer> OPEN_GRAPHS = new HashMap<>();
+    private Path registeredPath;
+    public boolean isBwGraph() { return bwGraph; }
+    public Path dataDirectory() { return Path.of(config.getString("storage.path", "data")); }
+    public Path databaseDirectory(String name) {
+        return Path.of(bwGraph ? config.getString("bwgraph.storage.root", "workspace/bw-graph") : "workspace", name)
+                .toAbsolutePath().normalize();
+    }
+    private static void checkName(String name) {
+        if (name == null || !name.matches("[a-zA-Z0-9_-]{1,128}"))
+            throw new IllegalArgumentException("Invalid database name");
+    }
 
     /**
      * Get JNI bridge instance for native LSM-Community operations
      * @return RustJNI instance for native graph operations
      */
-    public RustJNI getJni() {
+    public GraphStorage getJni() {
         return jni;
     }
 
@@ -58,28 +80,7 @@ public class CommunityGraph implements Graph, Serializable {
      * @return Initialized CommunityGraph instance
      */
     public static CommunityGraph open(final Configuration configuration) {
-        // Extract configuration parameters with defaults
-        String dbName = configuration.getString("db.name", "my_database");
-        String storagePath = configuration.getString("storage.path", "./data");
-
-        // Create storage directory if not exists
-        File parentDir = new File(storagePath);
-        if (!parentDir.exists() && !parentDir.mkdirs()) {
-            throw new RuntimeException("Failed to create storage directory: " + parentDir.getAbsolutePath());
-        }
-
-        // Create graph data file
-        File graphFile = new File(parentDir, dbName + ".graph");
-        try {
-            boolean isSuccess = graphFile.createNewFile();
-            if (!isSuccess) {
-                System.out.println(graphFile.getAbsolutePath() + " failed to create graph file");
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to create graph file: " + graphFile.getAbsolutePath(), e);
-        }
-
-        return new CommunityGraph(dbName);
+        return new CommunityGraph(configuration);
     }
 
     /**
@@ -136,23 +137,79 @@ public class CommunityGraph implements Graph, Serializable {
      *
      * @param dbName Name/path of the graph database (uses default if null/empty)
      */
-    public CommunityGraph(final String dbName) {
-        // Use default name if input is invalid, trim whitespace
-        final String actualDbName = (dbName == null || dbName.trim().isEmpty())
-                ? "lsm-data"
-                : dbName.trim();
+    public CommunityGraph(final String dbName) { this(defaultConfiguration(dbName)); }
 
-        graphHandle = openDB(actualDbName);
+    private static Configuration defaultConfiguration(String name) {
+        BaseConfiguration config = new BaseConfiguration();
+        config.setProperty("db.name", name == null || name.isBlank() ? "lsm-data" : name.trim());
+        return config;
     }
 
-    /**
-     * Open LSM-Community database via JNI bridge
-     *
-     * @param dbName Database name/path
-     * @return Native handle to opened database
-     */
-    public long openDB(String dbName) {
-        return jni.openDB(dbName);
+    private CommunityGraph(Configuration configuration) {
+        configuration.getKeys().forEachRemaining(k -> config.setProperty(k, configuration.getProperty(k)));
+        String backend = config.getString("storage.backend", "lsm-community").trim().toLowerCase(Locale.ROOT);
+        if (!backend.equals("lsm-community") && !backend.equals("bw-graph"))
+            throw new IllegalArgumentException("storage.backend must be lsm-community or bw-graph");
+        config.setProperty("storage.backend", backend);
+        bwGraph = backend.equals("bw-graph");
+        if (!bwGraph && !dataDirectory().toAbsolutePath().normalize().equals(Path.of("data").toAbsolutePath().normalize()))
+            throw new IllegalArgumentException("LSM-Community currently requires storage.path=data");
+        jni = bwGraph ? new BwGraphStorage(config) : new LsmCommunityStorage();
+        reload(config.getString("db.name", "my_database"));
+    }
+
+    public long openDB(String name) {
+        synchronized (LIFECYCLE) {
+            checkName(name);
+            if (graphHandle != -1) throw new IllegalStateException("Close the current graph before openDB");
+            Path store = databaseDirectory(name);
+            Path source = dataDirectory().resolve(name + ".graph");
+            Path importing = store.resolve("monac.importing");
+            if (bwGraph && Files.exists(importing))
+                throw new IllegalStateException("Incomplete import; preserve and inspect " + store);
+            try {
+                Files.createDirectories(dataDirectory());
+                if (!bwGraph && !Files.exists(source)) Files.writeString(source, "t 0 0\n", StandardCharsets.UTF_8);
+                graphHandle = jni.openDB(name);
+                databaseName = name; config.setProperty("db.name", name);
+                registeredPath = store;
+                OPEN_GRAPHS.merge(store, 1, Integer::sum);
+                if (bwGraph && ((BwGraphStorage) jni).newlyCreated(graphHandle) && config.getBoolean("bwgraph.import.on-create", true) && Files.exists(source)) {
+                    Files.writeString(importing, source.toAbsolutePath().toString());
+                    BwGraphImporter.load(this, source);
+                    Files.delete(importing);
+                }
+                return graphHandle;
+            } catch (IOException | RuntimeException e) {
+                if (graphHandle != -1) close();
+                throw new IllegalStateException("Cannot open graph " + name, e);
+            }
+        }
+    }
+
+    /** Clear only this backend's store, preserving the previous database in backups. */
+    public void clear() throws IOException {
+        synchronized (LIFECYCLE) {
+            checkName(databaseName);
+            Path storage = databaseDirectory(databaseName);
+            if (OPEN_GRAPHS.getOrDefault(storage, 0) != 1)
+                throw new IllegalStateException("Clear requires the only open graph lease");
+            Path backups = bwGraph ? storage.getParent().resolve("backups") : Path.of("workspace", "backups");
+            Files.createDirectories(backups);
+            Path backup = Files.createTempDirectory(backups, databaseName + "-");
+            close();
+            if (Files.exists(storage)) Files.move(storage, backup.resolve("storage"));
+            if (!bwGraph) {
+                Path topology = dataDirectory().resolve(databaseName + ".graph");
+                if (Files.exists(topology)) Files.move(topology, backup.resolve("graph.graph"));
+                Files.writeString(topology, "t 0 0\n", StandardCharsets.UTF_8);
+            }
+            jni.resetDB(databaseName);
+            boolean importOnCreate = config.getBoolean("bwgraph.import.on-create", true);
+            config.setProperty("bwgraph.import.on-create", false);
+            try { openDB(databaseName); }
+            finally { config.setProperty("bwgraph.import.on-create", importOnCreate); }
+        }
     }
 
     /**
@@ -162,73 +219,52 @@ public class CommunityGraph implements Graph, Serializable {
      * @param dbName Name of the graph database
      * @return Initialized CommunityGraph instance
      */
-    public static CommunityGraph open(final String dbName) {
-        // Create base data directory
-        File parentDir = new File("./data");
-        if (!parentDir.exists() && !parentDir.mkdirs()) {
-            throw new RuntimeException("Failed to create data directory: " + parentDir.getAbsolutePath());
-        }
-        // Create graph file with header initialization
-        File graphFile = new File(parentDir, dbName + ".graph");
-        try {
-            boolean isNewFile = graphFile.createNewFile();
+    public static CommunityGraph open(final String dbName) { return new CommunityGraph(dbName); }
 
-            // Write initialization header for new files
-            if (isNewFile) {
-                try (BufferedWriter writer = new BufferedWriter(
-                        new OutputStreamWriter(new FileOutputStream(graphFile), StandardCharsets.UTF_8))) {
-                    writer.write("t 0 0");
-                    writer.newLine();
-                    writer.flush();
-                }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to create graph file: " + graphFile.getAbsolutePath(), e);
+    /** Changing graph name retains the selected backend, root and import policy. */
+    public void reload(final String dbName) {
+        synchronized (LIFECYCLE) {
+            checkName(dbName);
+            close();
+            openDB(dbName);
         }
-
-        return new CommunityGraph(dbName);
     }
 
-    /**
-     * Reloads the graph database with the specified name
-     * Closes the existing connection (if active), recreates the data directory and graph file if needed,
-     * and initializes a new native database handle
-     *
-     * @param dbName Name of the graph database to reload
-     */
-    public void reload(final String dbName) {
-        if (graphHandle != -1) {
+    /** Explicit upload replaces only the selected backend's store, preserving a backup. */
+    public void importUploadedGraph(String name) throws IOException {
+        synchronized (LIFECYCLE) {
+            checkName(name);
+            if (!Files.isRegularFile(dataDirectory().resolve(name + ".graph")))
+                throw new IOException("Missing uploaded graph " + name);
+            Path target = databaseDirectory(name);
+            int ownLease = target.equals(registeredPath) ? 1 : 0;
+            if (OPEN_GRAPHS.getOrDefault(target, 0) > ownLease)
+                throw new IllegalStateException("Import requires exclusive access to the target graph");
             close();
-        }
-        // Create base data directory
-        File parentDir = new File("./data");
-        if (!parentDir.exists() && !parentDir.mkdirs()) {
-            throw new RuntimeException("Failed to create data directory: " + parentDir.getAbsolutePath());
-        }
-        // Create graph file with header initialization
-        File graphFile = new File(parentDir, dbName + ".graph");
-        try {
-            boolean isNewFile = graphFile.createNewFile();
-
-            // Write initialization header for new files
-            if (isNewFile) {
-                try (BufferedWriter writer = new BufferedWriter(
-                        new OutputStreamWriter(new FileOutputStream(graphFile), StandardCharsets.UTF_8))) {
-                    writer.write("t 0 0");
-                    writer.newLine();
-                    writer.flush();
-                }
+            if (Files.exists(target)) {
+                Path backups = target.getParent().resolve("backups");
+                Files.createDirectories(backups);
+                Path backup = Files.createTempDirectory(backups, name + "-upload-");
+                Files.move(target, backup.resolve("storage"));
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to create graph file: " + graphFile.getAbsolutePath(), e);
+            jni.resetDB(name);
+            boolean previous = config.getBoolean("bwgraph.import.on-create", true);
+            config.setProperty("bwgraph.import.on-create", true);
+            try { openDB(name); }
+            finally { config.setProperty("bwgraph.import.on-create", previous); }
         }
+    }
 
-        // Use default name if input is invalid, trim whitespace
-        final String actualDbName = (dbName == null || dbName.trim().isEmpty())
-                ? "lsm-data"
-                : dbName.trim();
-
-        graphHandle = openDB(actualDbName);
+    /** File formats refer to vertex IDs; only legacy un-mapped imports use raw handles. */
+    public CommunityVertex vertexFromFileId(long id) {
+        if (!bwGraph) return new CommunityVertex(this, id);
+        Vertex vertex = vertex(id);
+        if (vertex == null) throw new NoSuchElementException("Unknown imported vertex " + id);
+        return (CommunityVertex) vertex;
+    }
+    public CommunityEdge edgeFromFileEndpoints(long out, long in) {
+        long src = vertexFromFileId(out).handle(), dst = vertexFromFileId(in).handle();
+        return new CommunityEdge(this, (src << 32) | dst);
     }
 
     // ------------------------------ Core Graph Operations ------------------------------
@@ -254,6 +290,7 @@ public class CommunityGraph implements Graph, Serializable {
      */
     @Override
     public Vertex addVertex(final Object... keyValues) {
+        org.apache.tinkerpop.gremlin.structure.util.ElementHelper.legalPropertyKeyValueArray(keyValues);
         // Parse ID and label from properties
         Object vertexId = null;
         String label = Vertex.DEFAULT_LABEL;
@@ -285,16 +322,19 @@ public class CommunityGraph implements Graph, Serializable {
     public Vertex vertex(Object id) {
         long vertexHandle = -1;
         if (id instanceof CommunityVertex) {
-            return (CommunityVertex)id;
+            return ((CommunityVertex) id).graph() == this ? (CommunityVertex) id : null;
         } else {
             byte[] outerIdBytes = IdCodec.toBytes(id);
             vertexHandle = getVertexHandleById(graphHandle, outerIdBytes);
+            // Numeric file IDs are longs; Groovy integer literals should resolve them too.
+            if (vertexHandle == -1 && bwGraph && id instanceof Integer)
+                vertexHandle = getVertexHandleById(graphHandle, IdCodec.toBytes(((Integer) id).longValue()));
         }
 
         if (vertexHandle == -1) {
-            if (id instanceof Number) {
+            if (!bwGraph && id instanceof Number && Arrays.stream(getAllVertices(graphHandle)).anyMatch(v -> v == ((Number) id).longValue())) {
                 vertexHandle = ((Number) id).longValue();
-            }
+            } else return null;
         }
         return new CommunityVertex(this, vertexHandle);
     }
@@ -368,6 +408,8 @@ public class CommunityGraph implements Graph, Serializable {
      * @throws IllegalArgumentException If vertices are not CommunityVertex instances
      */
     public Edge addEdge(final String label, final Vertex outVertex, final Vertex inVertex, final Object... keyValues) {
+        org.apache.tinkerpop.gremlin.structure.util.ElementHelper.legalPropertyKeyValueArray(keyValues);
+        if (outVertex.graph() != this || inVertex.graph() != this) throw new IllegalArgumentException("Endpoints belong to another graph");
         // Validate vertex types
         if (!(outVertex instanceof CommunityVertex) || !(inVertex instanceof CommunityVertex)) {
             throw new IllegalArgumentException("Vertices must be of type CommunityVertex");
@@ -376,7 +418,7 @@ public class CommunityGraph implements Graph, Serializable {
         // Parse edge ID from properties
         Object edgeId = null;
         for (int i = 0; i < keyValues.length; i += 2) {
-            if (keyValues[i].toString().equals(T.id.getAccessor())) {
+            if (keyValues[i] == T.id) {
                 edgeId = keyValues[i + 1];
             }
         }
@@ -406,7 +448,7 @@ public class CommunityGraph implements Graph, Serializable {
     public Edge edge(final Object id) {
         byte[] outerIdBytes = IdCodec.toBytes(id);
         long edgeHandle = getEdgeHandleById(graphHandle, outerIdBytes);
-        return new CommunityEdge(this, edgeHandle);
+        return edgeHandle == -1 ? null : new CommunityEdge(this, edgeHandle);
     }
 
     /**
@@ -515,7 +557,9 @@ public class CommunityGraph implements Graph, Serializable {
      */
     @Override
     public Configuration configuration() {
-        return new BaseConfiguration();
+        BaseConfiguration copy = new BaseConfiguration();
+        config.getKeys().forEachRemaining(k -> copy.setProperty(k, config.getProperty(k)));
+        return copy;
     }
 
     /**
@@ -534,11 +578,13 @@ public class CommunityGraph implements Graph, Serializable {
      */
     @Override
     public void close() {
-        if (graphHandle == -1) {
-            return;
+        synchronized (LIFECYCLE) {
+            if (graphHandle == -1) return;
+            closeDB(graphHandle);
+            graphHandle = -1;
+            OPEN_GRAPHS.computeIfPresent(registeredPath, (p, count) -> count == 1 ? null : count - 1);
+            registeredPath = null;
         }
-        closeDB(graphHandle);
-        graphHandle = -1;
     }
 
     /**

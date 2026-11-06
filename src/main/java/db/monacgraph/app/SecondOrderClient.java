@@ -64,7 +64,7 @@ public class SecondOrderClient {
 
         // Manually create graph and g (Important: keep this part)
         ResultSet results = client.submit(
-                "graph = CommunityGraph.open('new'); " +
+                "graph.reload('new'); " +
                         "g = graph.traversal(SecondOrderTraversalSource.class); " +
                         "'Session initialized with SecondOrderTraversalSource'"
         );

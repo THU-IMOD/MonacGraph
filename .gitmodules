@@ -1,0 +1,4 @@
+[submodule "bw-cloud-graph"]
+	path = bw-cloud-graph
+	url = git@github.com:THU-IMOD/Bw-Cloud-Graph.git
+	branch = bw-cloud-graph-java

@@ -678,6 +678,7 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .vset-browser {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1100,6 +1101,22 @@ onUnmounted(() => {
         }
       }
     }
+  }
+}
+@container (max-width: 700px) {
+  .vset-main {
+    flex-direction: column;
+  }
+
+  .vset-right {
+    width: auto;
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .subset-visualization .subset-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 </style>

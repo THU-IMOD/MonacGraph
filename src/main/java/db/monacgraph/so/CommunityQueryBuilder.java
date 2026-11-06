@@ -1,6 +1,6 @@
 package db.monacgraph.so;
 
-import db.monacgraph.jni.RustJNI;
+import db.monacgraph.storage.GraphStorage;
 import db.monacgraph.community.CommunityGraph;
 import db.monacgraph.community.CommunityVertex;
 import db.monacgraph.serialize.VsetResultSerializer;
@@ -106,13 +106,14 @@ public class CommunityQueryBuilder {
      * @return a set of vertex subsets representing communities
      */
     public Set<Set<Vertex>> getCommunities() {
-        RustJNI jni = new RustJNI();
         CommunityGraph graph = (CommunityGraph) g.getGraph();
+        GraphStorage jni = graph.getJni();
         long graphHandle = graph.handle();
         long[] communityList = new long[0];
         switch (type) {
             case COMMUNITY:
                 communityList = jni.getCommunities(graphHandle);
+                break;
             case WCC:
                 communityList = jni.getWCC(graphHandle);
                 break;

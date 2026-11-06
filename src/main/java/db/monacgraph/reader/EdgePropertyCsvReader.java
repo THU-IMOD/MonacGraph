@@ -31,7 +31,7 @@ public class EdgePropertyCsvReader {
      */
     public void readProperties(String fileName) throws IOException {
         // 1. Validate data directory
-        String dataDirPath = "data";
+        String dataDirPath = graph.dataDirectory().toString();
         File dataDir = new File(dataDirPath);
         if (!dataDir.exists()) {
             throw new IOException("Data directory does not exist: " + dataDir.getAbsolutePath());
@@ -87,7 +87,7 @@ public class EdgePropertyCsvReader {
         }
 
         // Get edge instance
-        CommunityEdge edge = new CommunityEdge(graph, outVertexHandle << 32 | inVertexHandle);
+        CommunityEdge edge = graph.edgeFromFileEndpoints(outVertexHandle, inVertexHandle);
         if (edge.id() == null) {
             throw new IllegalArgumentException("Edge does not exist: " + outVertexHandle + "->" + inVertexHandle);
         }

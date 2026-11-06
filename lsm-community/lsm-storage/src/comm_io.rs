@@ -180,6 +180,11 @@ impl LsmCommunityStorageInner {
             // Step 3 - Recover the vertex index.
             let vertex_index_path = vertex_index_opt.unwrap();
             let vertex_index = VertexIndex::deserialize_from_file(&vertex_index_path)?;
+            for item in &vertex_index.vertex_array {
+                if item.is_normal() && !buckets.contains_key(&item.virtual_comm_id()) {
+                    anyhow::bail!("Missing bucket {} referenced by vertex index", item.virtual_comm_id());
+                }
+            }
 
             // Build lsm storage state.
             let state = LsmCommunityStorageState {
@@ -396,10 +401,8 @@ impl LsmCommunityStorageInner {
             .map(|entry| entry.path())
             .collect();
 
-        // Check if we found at least one bucket file
-        if bucket_paths.is_empty() {
-            return None;
-        }
+        // Empty/cold-start graphs may store every vertex in external storage.
+        // A persisted index is still recoverable without any bucket files.
 
         // Return the vertex index path and all bucket paths
         Some((vertex_index_path, bucket_paths))
@@ -918,5 +921,34 @@ impl LsmCommunity {
             println!("Invalid Vertex");
             return Ok((None, None));
         }
+    }
+}
+
+#[cfg(test)]
+mod cold_recovery_regression {
+    use super::*;
+    #[test]
+    fn recover_index_without_buckets() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let mut options = LsmCommunityStorageOptions::default();
+        options.graph_name = "cold".into();
+        options.work_space_dir = directory.path().to_string_lossy().into_owned();
+        let store = directory.path().join("cold");
+        std::fs::create_dir(&store)?;
+        let path = store.join("vertex_index.bin.zst");
+        for count in [0, 2] {
+            let mut index = VertexIndex::default();
+            for _ in 0..count { index.add_giant_vertex()?; }
+            index.serialize_to_file(&path, 3)?;
+            let (saved, buckets) = LsmCommunityStorageInner::check_recover(options.clone()).unwrap();
+            assert!(buckets.is_empty());
+            let (_, _, recovered) = LsmCommunityStorageInner::open(true, Some(saved), Some(buckets), options.clone())?;
+            assert_eq!(recovered.vertex_array.len(), count);
+        }
+        let mut broken = VertexIndex::default();
+        broken.vertex_array.push(crate::vertex_index::VertexIndexItem::normal(4, 0, 0));
+        broken.serialize_to_file(&path, 3)?;
+        assert!(LsmCommunityStorageInner::open(true, Some(path), Some(vec![]), options).is_err());
+        Ok(())
     }
 }

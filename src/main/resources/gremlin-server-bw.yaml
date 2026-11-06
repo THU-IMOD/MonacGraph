@@ -1,0 +1,70 @@
+# Gremlin Server Configuration for Gremmunity v5
+# Enhanced with uploaded graph support
+
+host: 0.0.0.0  # Changed from localhost to allow external access
+port: 8182
+
+# Configure Graph
+graphs: {
+  graph: conf/bw-graph.properties
+}
+
+# Script Engine Configuration
+scriptEngines: {
+  gremlin-groovy: {
+    plugins: {
+      org.apache.tinkerpop.gremlin.server.jsr223.GremlinServerGremlinPlugin: {},
+      org.apache.tinkerpop.gremlin.tinkergraph.jsr223.TinkerGraphGremlinPlugin: {},
+      org.apache.tinkerpop.gremlin.jsr223.ImportGremlinPlugin: {
+        classImports: [
+          java.lang.Math,
+          org.apache.tinkerpop.gremlin.structure.T,
+          db.monacgraph.community.CommunityGraph,
+          db.monacgraph.so.SecondOrderTraversalSource,
+          db.monacgraph.serialize.VsetResultSerializer
+        ],
+        methodImports: [java.lang.Math#*]
+      },
+      org.apache.tinkerpop.gremlin.jsr223.ScriptFileGremlinPlugin: {
+        # IMPORTANT: uploaded-graph-init.groovy is auto-generated when you upload files
+        # It will be created automatically when you upload your first graph
+        files: [scripts/lsm-session-init.groovy, scripts/empty-sample.groovy]
+#        , scripts/uploaded-graph-init.groovy
+      }
+    }
+  }
+}
+
+# Serializers Configuration
+serializers:
+  - { className: org.apache.tinkerpop.gremlin.util.ser.GraphSONMessageSerializerV3 }
+  - { className: org.apache.tinkerpop.gremlin.util.ser.GraphBinaryMessageSerializerV1 }
+
+# Processors Configuration
+# IMPORTANT: SessionOpProcessor must be listed FIRST for session support
+processors:
+  - { className: org.apache.tinkerpop.gremlin.server.op.session.SessionOpProcessor,
+      config: {
+        sessionTimeout: 28800000,  # 8 hours
+        globalFunctionCacheEnabled: false
+      }
+  }
+  - { className: org.apache.tinkerpop.gremlin.server.op.traversal.TraversalOpProcessor }
+
+# Use WsAndHttpChannelizer for both WebSocket and HTTP support
+channelizer: org.apache.tinkerpop.gremlin.server.channel.WsAndHttpChannelizer
+
+# Other Configurations
+metrics: {
+  consoleReporter: {enabled: false},
+  slf4jReporter: {enabled: false}
+}
+strictTransactionManagement: false
+maxInitialLineLength: 4096
+maxHeaderSize: 8192
+maxChunkSize: 8192
+maxContentLength: 10485760
+resultIterationBatchSize: 64
+writeBufferLowWaterMark: 32768
+writeBufferHighWaterMark: 65536
+evaluationTimeout: 1200000

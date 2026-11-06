@@ -34,3 +34,6 @@ def loadSampleData() {
 
 // 可选：自动加载示例数据
 // loadSampleData()
+
+// Gremlin Server registers the returned bindings for subsequent requests.
+return [g: g]

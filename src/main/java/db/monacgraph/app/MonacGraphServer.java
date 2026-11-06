@@ -1,8 +1,5 @@
 package db.monacgraph.app;
 
-import org.apache.tinkerpop.gremlin.driver.Client;
-import org.apache.tinkerpop.gremlin.driver.Cluster;
-import org.apache.tinkerpop.gremlin.driver.ResultSet;
 import org.apache.tinkerpop.gremlin.server.GremlinServer;
 import org.apache.tinkerpop.gremlin.server.Settings;
 import org.eclipse.jetty.server.Server;
@@ -35,10 +32,12 @@ public class MonacGraphServer {
 
     private GremlinServer gremlinServer;
     private Server uploadServer;
-    private Cluster cluster;
-    private Client gremlinClient;
 
-    private static final int UPLOAD_PORT = 8284;
+    private final int uploadPort;
+
+    public MonacGraphServer() { this(Integer.getInteger("monac.upload.port", 8284)); }
+    public MonacGraphServer(int uploadPort) { this.uploadPort = uploadPort; }
+    public int uploadPort() { return ((ServerConnector) uploadServer.getConnectors()[0]).getLocalPort(); }
     private static final String DATA_DIR = "data";
 
     /**
@@ -63,8 +62,8 @@ public class MonacGraphServer {
         logger.info("=".repeat(60));
         logger.info("  MonacGraph Server Started!");
         logger.info("  Gremlin API: ws://localhost:8182/gremlin");
-        logger.info("  Upload API:  http://localhost:{}/api/graph/upload", UPLOAD_PORT);
-        logger.info("  Health Check: http://localhost:{}/api/health", UPLOAD_PORT);
+        logger.info("  Upload API:  http://localhost:{}/api/graph/upload", uploadPort);
+        logger.info("  Health Check: http://localhost:{}/api/health", uploadPort);
         logger.info("Press Ctrl+C to stop");
         logger.info("=".repeat(60));
     }
@@ -75,11 +74,14 @@ public class MonacGraphServer {
     private void startGremlinServer(String configFile) throws Exception {
         logger.info("\n[1/2] Starting Gremlin Server...");
 
-        InputStream input = getClass().getClassLoader().getResourceAsStream(configFile);
+        InputStream input = Files.isRegularFile(Paths.get(configFile))
+                ? Files.newInputStream(Paths.get(configFile))
+                : getClass().getClassLoader().getResourceAsStream(configFile);
         if (input == null) {
             throw new IllegalArgumentException("Config file not found: " + configFile);
         }
-        Settings settings = Settings.read(input);
+        Settings settings;
+        try (input) { settings = Settings.read(input); }
 
         logger.info("Gremlin Server Configuration:");
         logger.info("  Host: {}", settings.host);
@@ -91,8 +93,7 @@ public class MonacGraphServer {
 
         logger.info("  Gremlin Server started on port {}", settings.port);
 
-        // Initialize Gremlin Client to communicate with the server
-        initializeGremlinClient(settings.host, settings.port);
+
     }
 
     /**
@@ -103,7 +104,8 @@ public class MonacGraphServer {
 
         uploadServer = new Server();
         ServerConnector connector = new ServerConnector(uploadServer);
-        connector.setPort(UPLOAD_PORT);
+        connector.setPort(uploadPort);
+        connector.setHost(System.getProperty("monac.upload.host"));
         uploadServer.addConnector(connector);
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
@@ -126,106 +128,20 @@ public class MonacGraphServer {
         context.addServlet(uploadHolder, "/api/graph/upload");
 
         uploadServer.start();
-        logger.info("  Upload Server started on port {}", UPLOAD_PORT);
+        logger.info("  Upload Server started on port {}", uploadPort);
     }
 
-    /**
-     * Initialize Gremlin Client for internal communication
-     */
-    private void initializeGremlinClient(String host, int port) {
-        try {
-            logger.info("\n[Internal] Initializing Gremlin Client...");
-
-            cluster = Cluster.build()
-                    .addContactPoint(host)
-                    .port(port)
-                    .maxWaitForConnection(10000)
-                    .create();
-
-            gremlinClient = cluster.connect();
-
-            logger.info("  Gremlin Client initialized for graph activation");
-        } catch (Exception e) {
-            logger.error("Failed to initialize Gremlin Client", e);
-        }
+    private db.monacgraph.community.CommunityGraph currentGraph() {
+        return (db.monacgraph.community.CommunityGraph) gremlinServer.getServerGremlinExecutor()
+                .getGraphManager().getGraph("graph");
     }
 
-    /**
-     * Execute graph initialization in global context
-     */
-    /**
-     * Close the current graph to release file locks
-     * This is necessary before overwriting graph files on Windows
-     */
-    private void closeCurrentGraph() {
-        if (gremlinClient == null) {
-            logger.warn("Gremlin Client not initialized, cannot close graph");
-            return;
-        }
-
-        try {
-            logger.info("Attempting to close current graph...");
-
-            // Execute graph.close() to release file locks
-            String closeScript = "try { if (graph != null) { graph.close(); 'Graph closed' } else { 'No graph to close' } } catch (Exception e) { 'Error closing graph: ' + e.message }";
-
-            ResultSet results = gremlinClient.submit(closeScript);
-            String result = results.all().get().toString();
-
-            logger.info("Close result: {}", result);
-            logger.info("  Current graph closed, file locks released");
-
-        } catch (Exception e) {
-            logger.warn("Failed to close current graph (this is OK if no graph was open): {}", e.getMessage());
-        }
-    }
-
-    private void executeGraphInitialization(String graphName, String vertexFile, String edgeFile) {
-        if (gremlinClient == null) {
-            logger.error("Gremlin Client not initialized, cannot activate graph");
-            return;
-        }
-
-        try {
-            logger.info("\n[Graph Activation] Executing initialization in global context...");
-
-            // Build initialization script
-            StringBuilder script = new StringBuilder();
-
-            script.append("// Open/Reload graph (handle close() case)\n");
-            script.append("try { graph.reload('").append(graphName).append("'); } catch (e) { graph = CommunityGraph.open('").append(graphName).append("'); }\n");
-            script.append("g = graph.traversal(SecondOrderTraversalSource.class)\n");
-            script.append("\n");
-
-            if (vertexFile != null) {
-                script.append("// Load vertex properties\n");
-                script.append("graph.loadVertexProperty('").append(vertexFile).append("')\n");
-                script.append("\n");
-            }
-
-            if (edgeFile != null) {
-                script.append("// Load edge properties\n");
-                script.append("graph.loadEdgeProperty('").append(edgeFile).append("')\n");
-                script.append("\n");
-            }
-
-            script.append("'Graph \"' + '").append(graphName).append("' + '\" activated globally'");
-
-            // Execute in sessionless mode (global context)
-            logger.info("Executing: {}", script.toString().replace("\n", "; "));
-            ResultSet results = gremlinClient.submit(script.toString());
-
-            // Wait for completion
-            results.all().get();
-
-            logger.info("  Graph '{}' activated in global context", graphName);
-            logger.info("  Variables 'graph' and 'g' are now available globally");
-            logger.info("  Previous graph (if any) was closed to release the lock");
-
-        } catch (Exception e) {
-            logger.error("Failed to activate graph in global context", e);
-            logger.error("You may need to restart the server or execute initialization manually");
-        }
+    private synchronized void executeGraphInitialization(String graphName, String vertexFile, String edgeFile)
+            throws IOException {
+        var graph = currentGraph();
+        graph.importUploadedGraph(graphName);
+        if (vertexFile != null) graph.loadVertexProperty(vertexFile);
+        if (edgeFile != null) graph.loadEdgeProperty(edgeFile);
     }
 
     /**
@@ -263,7 +179,7 @@ public class MonacGraphServer {
         }
 
         @Override
-        protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+        protected synchronized void doPost(HttpServletRequest req, HttpServletResponse resp)
                 throws ServletException, IOException {
             enableCORS(resp);
             resp.setContentType("application/json");
@@ -284,13 +200,7 @@ public class MonacGraphServer {
 
                 logger.info("Processing upload for graph: {}", graphName);
 
-                // IMPORTANT: Close the graph BEFORE saving files to release file locks
-                // This prevents "file is being used by another process" errors on Windows
-                logger.info("Closing current graph to release file locks...");
-                server.closeCurrentGraph();
-
-                // 2. Ensure data directory exists
-                Path dataPath = Paths.get(DATA_DIR);
+                Path dataPath = server.currentGraph().dataDirectory();
                 Files.createDirectories(dataPath);
 
                 // 3. Process graph file (required)
@@ -315,6 +225,8 @@ public class MonacGraphServer {
                 if (vertexFilePart != null && vertexFilePart.getSize() > 0) {
                     vertexFileName = getFileName(vertexFilePart);
                     if (vertexFileName != null) {
+                        if (!Paths.get(vertexFileName).getFileName().toString().equals(vertexFileName))
+                            throw new IOException("Invalid property filename");
                         if (!vertexFileName.endsWith(".json") && !vertexFileName.endsWith(".csv")) {
                             sendError(resp, "Vertex properties file must be .json or .csv");
                             return;
@@ -331,6 +243,8 @@ public class MonacGraphServer {
                 if (edgeFilePart != null && edgeFilePart.getSize() > 0) {
                     edgeFileName = getFileName(edgeFilePart);
                     if (edgeFileName != null) {
+                        if (!Paths.get(edgeFileName).getFileName().toString().equals(edgeFileName))
+                            throw new IOException("Invalid property filename");
                         if (!edgeFileName.endsWith(".json") && !edgeFileName.endsWith(".csv")) {
                             sendError(resp, "Edge properties file must be .json or .csv");
                             return;
@@ -340,6 +254,13 @@ public class MonacGraphServer {
                         logger.info("  Saved edge properties: {}", edgeFilePath);
                     }
                 }
+
+                if (graphFileName == null) {
+                    sendError(resp, "Graph file is required");
+                    return;
+                }
+                // Activation must succeed before acknowledging success.
+                server.executeGraphInitialization(graphName, vertexFileName, edgeFileName);
 
                 // 6. Build success response
                 Map<String, Object> data = new HashMap<>();
@@ -359,11 +280,8 @@ public class MonacGraphServer {
 
                 logger.info("  Upload completed successfully for graph: {}", graphName);
 
-                // Update initialization script (for server restart)
-                updateInitScript(graphName, vertexFileName, edgeFileName);
-
-                // IMPORTANT: Execute initialization in global context (immediate effect)
-                server.executeGraphInitialization(graphName, vertexFileName, edgeFileName);
+                // Persist graph selection explicitly in the selected properties file for restart;
+                // never overwrite a shared initialization script from an upload request.
 
             } catch (Exception e) {
                 logger.error("Upload failed", e);
@@ -583,44 +501,6 @@ public class MonacGraphServer {
                     .replace("\t", "\\t");
         }
 
-        /**
-         * Update initialization script to load the uploaded graph
-         */
-        private void updateInitScript(String graphName, String vertexFile, String edgeFile) {
-            try {
-                Path scriptsDir = Paths.get("scripts");
-                Files.createDirectories(scriptsDir);
-
-                // Create/update the uploaded graph initialization script
-                Path initScript = scriptsDir.resolve("uploaded-graph-init.groovy");
-
-                StringBuilder script = new StringBuilder();
-                script.append("// Auto-generated initialization script for uploaded graph\n");
-                script.append("// Generated at: ").append(java.time.LocalDateTime.now()).append("\n\n");
-
-                script.append("// Initialize graph\n");
-                script.append("graph.reload('").append(graphName).append("')\n");
-                script.append("g = graph.traversal(SecondOrderTraversalSource.class)\n\n");
-
-                if (vertexFile != null) {
-                    script.append("// Load vertex properties\n");
-                    script.append("graph.loadVertexProperty('").append(vertexFile).append("')\n\n");
-                }
-
-                if (edgeFile != null) {
-                    script.append("// Load edge properties\n");
-                    script.append("graph.loadEdgeProperty('").append(edgeFile).append("')\n\n");
-                }
-
-                script.append("println \"Uploaded graph '").append(graphName).append("' initialized\"\n");
-
-                Files.write(initScript, script.toString().getBytes());
-                logger.info("  Updated initialization script: {}", initScript);
-
-            } catch (IOException e) {
-                logger.error("Failed to update initialization script", e);
-            }
-        }
     }
 
     /**
@@ -656,25 +536,6 @@ public class MonacGraphServer {
      */
     public void stop() {
         logger.info("\nStopping Gremmunity Server...");
-
-        // Close Gremlin client
-        if (gremlinClient != null) {
-            try {
-                gremlinClient.close();
-                logger.info("  Gremlin Client closed");
-            } catch (Exception e) {
-                logger.error("Error closing Gremlin client", e);
-            }
-        }
-
-        if (cluster != null) {
-            try {
-                cluster.close();
-                logger.info("  Gremlin Cluster closed");
-            } catch (Exception e) {
-                logger.error("Error closing Gremlin cluster", e);
-            }
-        }
 
         // Stop upload server
         if (uploadServer != null) {

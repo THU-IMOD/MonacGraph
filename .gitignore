@@ -77,6 +77,10 @@ coverage/
 hs_err_pid*
 replay_pid*
 workspace/
+node_modules/
+transfer/
 *.dylib
 *.dll
 *.so
+
+/subgraph/build-monac-*/
