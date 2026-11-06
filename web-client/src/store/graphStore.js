@@ -16,6 +16,8 @@ export const useGraphStore = defineStore('graph', {
     },
 
     // 图信息
+    storageBackend: '',
+    storageMedium: '',
     graphName: 'my_database', // 当前图名称
 
     // 图数据
@@ -65,6 +67,7 @@ export const useGraphStore = defineStore('graph', {
         this.isConnected = true
         // 初始化 SecondOrder session
         await gremlinClient.initializeSecondOrderSession()
+        await this.refreshStorageInfo()
       }
       
       return result
@@ -153,7 +156,24 @@ export const useGraphStore = defineStore('graph', {
     /**
      * 刷新图数据
      */
+    async refreshStorageInfo() {
+      const result = await gremlinClient.executeQuery(
+        "[graph.configuration().getString('db.name'), " +
+        "graph.configuration().getString('storage.backend','lsm-community'), " +
+        "graph.configuration().getString('bwgraph.storage.backend','local')]"
+      )
+      if (!result.success) return
+      let values = gremlinClient.parseGraphSON(result.data)
+      if (Array.isArray(values) && Array.isArray(values[0])) values = values[0]
+      if (Array.isArray(values) && values.length === 3) {
+        this.graphName = values[0]
+        this.storageBackend = values[1]
+        this.storageMedium = values[2]
+      }
+    },
+
     async refreshGraphData() {
+      await this.refreshStorageInfo()
       const result = await gremlinClient.getGraphData()
       
       if (result.success) {

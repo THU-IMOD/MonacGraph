@@ -62,7 +62,7 @@ public class CommunityEdge extends CommunityElement implements Edge {
             String key = keyObj.toString();
 
             // Filter hidden/empty keys (per TinkerPop specifications)
-            if (!Graph.Hidden.isHidden(key) && !key.isEmpty()) {
+            if (keyObj != T.id && keyObj != T.label && !Graph.Hidden.isHidden(key) && !key.isEmpty()) {
                 cleanedList.add(keyObj);
                 cleanedList.add(value);
             }
@@ -77,7 +77,7 @@ public class CommunityEdge extends CommunityElement implements Edge {
         }
 
         // Serialize and persist edge data
-        byte[] outerIdBytes = IdCodec.toBytes(id);
+        byte[] outerIdBytes = IdCodec.toBytes(this.id);
         this.edgeHandle = createEdge(graph.handle(), outerIdBytes, outVertex.handle(), inVertex.handle(), serialize());
     }
 
@@ -101,7 +101,7 @@ public class CommunityEdge extends CommunityElement implements Edge {
             String key = keyObj.toString();
 
             // Filter hidden/empty keys (per TinkerPop specifications)
-            if (!Graph.Hidden.isHidden(key) && !key.isEmpty()) {
+            if (keyObj != T.id && keyObj != T.label && !Graph.Hidden.isHidden(key) && !key.isEmpty()) {
                 cleanedList.add(keyObj);
                 cleanedList.add(value);
             }

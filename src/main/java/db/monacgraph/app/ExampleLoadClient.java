@@ -76,7 +76,7 @@ public class ExampleLoadClient {
 
         // Initialize traversal source for the session
         ResultSet results = client.submit(
-                "graph = CommunityGraph.open('example'); " +
+                "graph.reload('example'); " +
                         "g = graph.traversal(SecondOrderTraversalSource.class); " +
                         "'Example CommunityGraph session initialized'"
         );

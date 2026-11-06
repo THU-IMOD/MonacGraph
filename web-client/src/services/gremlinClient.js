@@ -729,6 +729,8 @@ charlie.addEdge('knows', alice);
 result = g.Vset().forall('x').forall('y').filter('g.V(x).out("knows").is(y) || g.V(y).out("knows").is(x) || g.V(x).is(y)').execute(); 
 result.size()`)
 
+      if (!result.success) return result
+
       console.log('✓ Test data created')
       console.log('  - 4 vertices: Alice, Bob, Charlie, David')
       console.log('  - 3 edges: Alice->Bob, Bob->Charlie, Charlie->Alice')
@@ -746,7 +748,8 @@ result.size()`)
    */
   async clearGraph() {
     try {
-      await this.executeQuery("g.V().drop().iterate()")
+      const result = await this.executeQuery("graph.clear(); 'Graph cleared'")
+      if (!result.success) return result
       console.log('✓ Graph cleared')
       return { success: true }
     } catch (error) {

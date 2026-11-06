@@ -35,7 +35,7 @@
             <template #prepend>graph =</template>
           </el-input>
           <div class="help-text">
-            Name for CommunityGraph.open('{{ formData.graphName || "name" }}')
+            Name for the new graph; keeps the selected storage backend
           </div>
         </el-form-item>
 
@@ -56,7 +56,7 @@
             </el-button>
             <template #tip>
               <div class="upload-tip">
-                Graph topology file (optional, .graph)
+                Graph topology file (required, .graph)
               </div>
             </template>
           </el-upload>
@@ -180,7 +180,7 @@ const formRules = {
       trigger: 'blur'
     }
   ]
-  // graphFile is now optional - you can reload existing graphs
+  // The upload endpoint requires a topology file; properties remain optional.
 }
 
 // File change handlers
@@ -267,6 +267,10 @@ const handleSubmit = async () => {
   try {
     // Validate form
     await formRef.value.validate()
+    if (!formData.value.graphFile) {
+      ElMessage.error('Please select a .graph topology file')
+      return
+    }
     
     // Confirm upload
     await ElMessageBox.confirm(
@@ -320,7 +324,7 @@ const uploadFiles = async () => {
   // Add graph name
   formDataToSend.append('graphName', formData.value.graphName)
   
-  // Add files (all optional now)
+  // Add topology and optional property files
   if (formData.value.graphFile) {
     formDataToSend.append('graphFile', formData.value.graphFile)
   }

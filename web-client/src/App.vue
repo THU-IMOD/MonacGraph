@@ -54,6 +54,9 @@ Database System with Community-Aware Storage</span>
                 <el-descriptions-item label="Graph Name">
                   <el-tag type="info">{{ store.graphName || 'my_database' }}</el-tag>
                 </el-descriptions-item>
+                <el-descriptions-item label="Storage" v-if="store.storageBackend">
+                  {{ store.storageBackend }}{{ store.storageMedium === 's3' ? ' · S3 / MinIO' : '' }}
+                </el-descriptions-item>
                 <el-descriptions-item label="Nodes">
                   {{ store.graphStats.nodeCount }}
                 </el-descriptions-item>
@@ -276,7 +279,7 @@ result.size()`
     query: `g.SecondOrder()
   .forall('x')
   .exist('y')
-  .filter('g.V(x).outE().is(y)')
+  .filter('g.V(x).out("knows").is(y)')
   .execute()`
   },
   {
@@ -393,7 +396,11 @@ const handleCreateTestData = async () => {
       { type: 'info' }
     )
     
-    await store.createTestData()
+    const result = await store.createTestData()
+    if (!result.success) {
+      ElMessage.error(result.error || 'Failed to create test data')
+      return
+    }
     ElMessage.success('Test data created')
   } catch {
     // User cancelled
@@ -408,7 +415,11 @@ const handleClearGraph = async () => {
       { type: 'warning' }
     )
     
-    await store.clearGraph()
+    const result = await store.clearGraph()
+    if (!result.success) {
+      ElMessage.error(result.error || 'Failed to clear graph')
+      return
+    }
     ElMessage.success('Graph cleared')
   } catch {
     // User cancelled
@@ -937,5 +948,10 @@ onMounted(async () => {
   border-radius: 20px;
   font-weight: 600;
   padding: 4px 12px;
+}
+@media (max-width: 1100px) {
+  .app-header .subtitle {
+    display: none;
+  }
 }
 </style>

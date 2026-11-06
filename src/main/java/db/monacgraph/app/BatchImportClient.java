@@ -92,7 +92,7 @@ public class BatchImportClient {
     private static void initializeSession(Client client) throws Exception {
         logger.info("Initializing graph session...");
         ResultSet results = client.submit(
-                "graph = CommunityGraph.open('batch_database'); " +
+                "graph.reload('batch_database'); " +
                         "g = graph.traversal(); " +
                         "'Session initialized'"
         );

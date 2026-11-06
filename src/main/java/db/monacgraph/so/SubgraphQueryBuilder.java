@@ -308,7 +308,14 @@ public class SubgraphQueryBuilder {
      * @return list of matches; each match is a list of data-graph vertex indices
      *         in query-vertex order (index i = data vertex matched to query vertex i)
      */
+    private String dataGraphPath, queryGraphPath;
     private List<List<Integer>> executeRaw() {
+        java.nio.file.Path temporary;
+        try { temporary = java.nio.file.Files.createTempDirectory(java.nio.file.Path.of(TRANSFER_DIR), "query-"); }
+        catch (IOException e) { throw new UncheckedIOException(e); }
+        dataGraphPath = temporary.resolve("data.graph").toString();
+        queryGraphPath = temporary.resolve("query.graph").toString();
+        try {
 
         // 1. Collect data vertices in a stable, deterministic order
         List<Vertex> dataVertices = collectDataVertices();
@@ -348,10 +355,17 @@ public class SubgraphQueryBuilder {
                             "Please build the C++ engine following the instructions in README.md.");
         }
         long[] rawMatches = jni.runSubgraphMatch(
-                DATA_GRAPH_PATH, QUERY_GRAPH_PATH, quantifiers, phiCallback);
+                dataGraphPath, queryGraphPath, quantifiers, phiCallback);
 
         // 8. Decode raw matches → List<List<Integer>>
         return decodeRawMatches(rawMatches, queryVertexLabels.size());
+        } finally {
+            try {
+                java.nio.file.Files.deleteIfExists(temporary.resolve("data.graph"));
+                java.nio.file.Files.deleteIfExists(temporary.resolve("query.graph"));
+                java.nio.file.Files.deleteIfExists(temporary);
+            } catch (IOException e) { throw new UncheckedIOException(e); }
+        }
     }
 
     /**
@@ -426,7 +440,7 @@ public class SubgraphQueryBuilder {
             }
         });
 
-        try (PrintWriter pw = new PrintWriter(new FileWriter(DATA_GRAPH_PATH))) {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(dataGraphPath))) {
             pw.printf("t %d %d%n", vertices.size(), edges.size());
             for (int i = 0; i < vertices.size(); i++) {
                 int labelInt = internLabel(vertices.get(i).label());
@@ -456,7 +470,7 @@ public class SubgraphQueryBuilder {
             degree[e[1]]++;
         }
 
-        try (PrintWriter pw = new PrintWriter(new FileWriter(QUERY_GRAPH_PATH))) {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(queryGraphPath))) {
             pw.printf("t %d %d%n", qn, qm);
             for (int i = 0; i < qn; i++) {
                 String lbl   = queryVertexLabels.get(i);

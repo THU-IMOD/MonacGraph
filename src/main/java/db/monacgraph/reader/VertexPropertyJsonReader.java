@@ -33,7 +33,7 @@ public class VertexPropertyJsonReader {
      */
     public void readProperties(String fileName) throws IOException {
         // 1. Define data directory path (data folder under project root, can be changed to absolute path)
-        String dataDirPath = "data";
+        String dataDirPath = graph.dataDirectory().toString();
         File dataDir = new File(dataDirPath);
 
         // Core check: fail fast if data directory does not exist
@@ -107,7 +107,7 @@ public class VertexPropertyJsonReader {
         long vertexHandle = vertexFieldNode.asLong();
 
         // Get vertex instance via handle
-        CommunityVertex vertex = new CommunityVertex(graph, vertexHandle);
+        CommunityVertex vertex = graph.vertexFromFileId(vertexHandle);
         if (vertex.id() == null) {
             throw new NoSuchElementException("Vertex with handle " + vertexHandle + " not found");
         }

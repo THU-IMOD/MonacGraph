@@ -33,7 +33,7 @@ public class EdgePropertyJsonReader {
      */
     public void readProperties(String fileName) throws IOException {
         // 1. Define data directory path
-        String dataDirPath = "data";
+        String dataDirPath = graph.dataDirectory().toString();
         File dataDir = new File(dataDirPath);
 
         // Validate data directory validity
@@ -111,7 +111,7 @@ public class EdgePropertyJsonReader {
         long inVertexHandle = inVertexNode.asLong();
 
         // Get edge instance via source/target vertex handles (assuming CommunityEdge constructor exists)
-        CommunityEdge edge = new CommunityEdge(graph, outVertexHandle << 32 | inVertexHandle);
+        CommunityEdge edge = graph.edgeFromFileEndpoints(outVertexHandle, inVertexHandle);
         if (edge.id() == null) {
             throw new NoSuchElementException("Edge with outVertex " + outVertexHandle +
                     " and inVertex " + inVertexHandle + " not found");
