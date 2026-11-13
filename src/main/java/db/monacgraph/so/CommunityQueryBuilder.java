@@ -113,6 +113,7 @@ public class CommunityQueryBuilder {
         switch (type) {
             case COMMUNITY:
                 communityList = jni.getCommunities(graphHandle);
+                break;
             case WCC:
                 communityList = jni.getWCC(graphHandle);
                 break;
@@ -127,13 +128,29 @@ public class CommunityQueryBuilder {
         for (int i = 0; i < k; i++) {
             communityArray[i] = new HashSet<>();
         }
-        for (int i = 1; i < len; i+=2) {
-            long vertexHandle = communityList[i];
-            int communityId = (int) communityList[i + 1];
-            communityArray[communityId].add(new CommunityVertex(graph, vertexHandle));
+        if (type ==  CommunityType.COMMUNITY) {
+            int pos = 1, communityId = 0;
+            while (pos < len) {
+                for (int i = pos; i < pos + communityList[pos]; i++) {
+                    long vertexHandle = communityList[i + 1];
+                    communityArray[communityId].add(new CommunityVertex(graph, vertexHandle));
+                }
+                if (!communityArray[communityId].isEmpty()){
+                    communities.add(communityArray[communityId]);
+                }
+                communityId++;
+                pos += (communityList[pos] + 1);
+            }
         }
-        for (int i = 0; i < k; i++) {
-            communities.add(communityArray[i]);
+        else {
+            for (int i = 1; i < len; i+=2) {
+                long vertexHandle = communityList[i];
+                int communityId = (int) communityList[i + 1];
+                communityArray[communityId].add(new CommunityVertex(graph, vertexHandle));
+            }
+            for (int i = 0; i < k; i++) {
+                communities.add(communityArray[i]);
+            }
         }
         return communities;
     }
