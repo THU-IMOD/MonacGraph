@@ -1,4 +1,6 @@
 use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::fs::OpenOptions;
 use std::io::Result;
 use std::path::Path;
 
@@ -44,12 +46,21 @@ impl Default for DiskManagerOptions {
 /// - Linux: io_uring for async batched I/O
 /// - macOS: fcntl optimizations + pread
 /// - Windows: standard I/O with optional FILE_FLAG_NO_BUFFERING
-#[derive(Debug)]
 pub struct BktDiskManager {
     file: File,
     size: u64,
     #[cfg(target_os = "linux")]
     io_uring: Option<std::sync::Arc<std::sync::Mutex<IoUring>>>,
+}
+
+impl std::fmt::Debug for BktDiskManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("BktDiskManager");
+        debug.field("file", &self.file).field("size", &self.size);
+        #[cfg(target_os = "linux")]
+        debug.field("io_uring_enabled", &self.io_uring.is_some());
+        debug.finish()
+    }
 }
 
 impl BktDiskManager {
