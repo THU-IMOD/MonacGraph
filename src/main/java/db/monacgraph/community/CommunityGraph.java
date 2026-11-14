@@ -163,7 +163,6 @@ public class CommunityGraph implements Graph, Serializable {
             checkName(name);
             if (graphHandle != -1) throw new IllegalStateException("Close the current graph before openDB");
             Path store = databaseDirectory(name);
-            boolean newlyCreated = !Files.exists(store);
             Path source = dataDirectory().resolve(name + ".graph");
             Path importing = store.resolve("monac.importing");
             if (bwGraph && Files.exists(importing))
@@ -175,7 +174,7 @@ public class CommunityGraph implements Graph, Serializable {
                 databaseName = name; config.setProperty("db.name", name);
                 registeredPath = store;
                 OPEN_GRAPHS.merge(store, 1, Integer::sum);
-                if (bwGraph && newlyCreated && config.getBoolean("bwgraph.import.on-create", true) && Files.exists(source)) {
+                if (bwGraph && ((BwGraphStorage) jni).newlyCreated(graphHandle) && config.getBoolean("bwgraph.import.on-create", true) && Files.exists(source)) {
                     Files.writeString(importing, source.toAbsolutePath().toString());
                     BwGraphImporter.load(this, source);
                     Files.delete(importing);

@@ -10,10 +10,10 @@ public final class BwGraphStorage implements GraphStorage {
     private final BwGraphJNI jni;
     private static String loadedLibrary;
     private static boolean initialized;
+    public boolean newlyCreated(long graph) { return jni.newlyCreated(graph); }
+    @Override public void resetDB(String name) { jni.resetDB(name); }
     public BwGraphStorage(Configuration config) {
         String actual = System.getenv().getOrDefault("BWGRAPH_STORAGE_BACKEND", "local");
-        if (!actual.equals("local")) throw new IllegalStateException(
-            "The bw-graph branch supports local storage; use bw-cloud-graph for S3");
         String expected = config.getString("bwgraph.storage.backend", actual);
         if (!actual.equals(expected)) throw new IllegalStateException(
             "bwgraph.storage.backend requires matching BWGRAPH_STORAGE_BACKEND environment");

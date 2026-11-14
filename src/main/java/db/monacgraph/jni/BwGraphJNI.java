@@ -27,6 +27,12 @@ public final class BwGraphJNI {
     public long openDB(String name) {
         return openNative(root, Objects.requireNonNull(name).getBytes(StandardCharsets.UTF_8));
     }
+    /** Explicit maintenance reset; caller must close all leases first. Local mode is unchanged. */
+    public void resetDB(String name) {
+        resetNative(root, Objects.requireNonNull(name).getBytes(StandardCharsets.UTF_8));
+    }
+    private native void resetNative(byte[] root, byte[] name);
+    public native boolean newlyCreated(long graph);
     public native void closeDB(long graph);
     public native long getVertexHandleById(long graph, byte[] id);
     public native long[] getAllVertices(long graph);
