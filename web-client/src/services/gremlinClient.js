@@ -95,7 +95,7 @@ class GremlinService {
       
       // 发送查询请求（sessionless 模式 - 全局上下文）
       const response = await axios.post(this.baseUrl, {
-        gremlin: query,
+        gremlin: "g = graph.traversal(SecondOrderTraversalSource.class); " + query,
         bindings: {},
         language: 'gremlin-groovy'
         // Removed: session parameter
