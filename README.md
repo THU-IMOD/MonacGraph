@@ -224,7 +224,7 @@ Bw 支持外部 UUID/字符串 ID、属性、双向查询有向边、顶点级�
 验证入口：`StorageBackendTest` 覆盖两后端 CRUD、属性、分析、重开及 Bw 的导入/并发/隔离；
 `StorageServerTest` 启动真实 Gremlin/HTTP 服务，覆盖远程遍历、上传替换、清空和后端保持。
 不设置 `bwgraph.integration=true` 时这些测试会跳过，因此普通 `mvn test` 不是双后端验证结果。
-本次为 Apple Silicon macOS 验证，Linux/Windows 部署尚未验证。
+原始验证环境为 Apple Silicon macOS；WSL Linux 验证记录见下文，Windows 原生部署尚未验证。
 
 严格 JNI 检查下，本机 Java 17 + Netty 的池化 zlib 编解码可在不加载任何图数据库库的独立程序中复现错误。
 因此集成测试配置使用 Netty unpooled 分配器并保留 `-Xcheck:jni`；只改变测试网络缓冲区，生产启动不改变池化设置。
@@ -242,6 +242,22 @@ Bw-Graph 的 Debug、Release、事务构建各 57/57 CTest 通过。测试日志
 
 
 ### S3 / MinIO 存储模式
+
+#### WSL Linux 验证（2026-11-15）
+
+合并后的 MonacGraph 使用 Bw-Cloud-Graph 固定提交 `e283a3f3bf97871944a591c13dc9b2fb0c1f878a`，未修改该引擎的核心源码。
+Ubuntu WSL / Java 17 下，新编译云引擎 JNI、Maven Shade 打包和前端生产构建成功。
+本地模式 Maven 集成测试 10 项通过、1 项云测试跳过；另行启用本地 MinIO 后，`CloudBackendTest` 通过，覆盖移走本地缓存后的恢复。
+运行中的健康接口、前端页面、Gremlin 直接查询和前端代理查询均返回 HTTP 200，查询确认存储模式为 `s3`。
+本次修复了 LSM 后端在 Linux 默认使用 `O_DIRECT` 而调用方缓冲区未对齐导致的导入错误，Linux 默认改用缓冲 I/O。
+这些检查不包含事务编译、崩溃恢复或大图性能验证。
+
+在 WSL 中使用 Linux 原生源码目录构建；Windows Git worktree 的 `.git` 文件可能包含 Windows 绝对路径，不能直接供 Linux Git 使用。
+Linux JDK 示例为 `export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64`；除已有 C++ 依赖外，云引擎还需要 libcurl 开发包（Ubuntu：`sudo apt-get install libcurl4-openssl-dev`）。
+MinIO 需先启动并创建 bucket，再按下文设置环境变量和执行构建、测试、启动命令。凭据保存在本机私有文件或环境中，不提交到 Git。
+若 Windows 的 localhost 转发不可用，可让 Vite 使用 `npm run dev -- --host 0.0.0.0`，通过 WSL IP 访问 5173 端口；前端代理仍连接 WSL 内的 Gremlin 服务。
+
+#### 云模式配置
 
 `bw-cloud-graph-java` 分支通过同一 Bw JNI 使用 S3 多尺度页存储；Gremlin API 不变。
 使用 `conf/bw-cloud.properties` 和 `gremlin-server-bw-cloud.yaml`，不要直接复用本地模式的数据库目录。
