@@ -25,7 +25,7 @@ pub struct DiskManagerOptions {
 
 impl Default for DiskManagerOptions {
     fn default() -> Self {
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         {
             return Self {
                 use_direct_io: true,
@@ -33,7 +33,9 @@ impl Default for DiskManagerOptions {
             };
         }
 
-        #[cfg(target_os = "windows")]
+        // Linux O_DIRECT requires aligned buffers; callers currently use Vec<u8>.
+        // Use buffered I/O by default until the direct path provides alignment.
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         Self {
             use_direct_io: false,
             queue_depth: 256,
