@@ -313,6 +313,11 @@ result.size()`
     title: 'BFS: Reachable Vertices',
     description: 'Find all vertices reachable from vertex 1',
     query: 'g.BFS(1).executeForWeb()'
+  },
+  {
+    title: 'RandomWalk: Random Walk',
+    description: 'Run 50 random walks of up to 4 steps from vertex 1',
+    query: 'g.RandomWalk(1).walks(50).length(4).executeForWeb()'
   }
 ])
 
