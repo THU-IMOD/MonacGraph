@@ -313,6 +313,12 @@ result.size()`
     title: 'BFS: Reachable Vertices',
     description: 'Find all vertices reachable from vertex 1',
     query: 'g.BFS(1).executeForWeb()'
+  },
+  {
+    title: 'KCore: Two-Core',
+    description: 'Find the 2-core of the graph',
+    query: 'g.KCore().k(2).executeForWeb()'
+  }
   }
 ])
 

@@ -86,6 +86,9 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
         return new BfsQueryBuilder(this, id);
     }
 
+    public KCoreQueryBuilder KCore() {
+        return new KCoreQueryBuilder(this);
+    }
     /** Entry point for second-order subgraph pattern matching queries. */
     public SubgraphQueryBuilder Subgraph() {
         return new SubgraphQueryBuilder(this);
