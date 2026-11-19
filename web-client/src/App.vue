@@ -290,6 +290,11 @@ result.size()`
   .executeForWeb()`
   },
   {
+    title: 'PPR: Personalized PageRank',
+    description: 'Follow outgoing edges from Alice, with a 15% reset probability, and show the top 2 vertices.',
+    query: 'g.PPR(1).reset(0.15).topK(2).executeForWeb()'
+  },
+  {
     title: 'WCC: Find Weakly Connected Components',
     description: 'Find all weakly connected components in the graph',
     query: 'g.WCC().executeForWeb()'

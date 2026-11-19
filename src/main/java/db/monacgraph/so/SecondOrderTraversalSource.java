@@ -65,6 +65,14 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
         return new VertexSubsetQueryBuilder(this);
     }
 
+    public PprQueryBuilder PPR(Object... seedIds) {
+        return new PprQueryBuilder(this, java.util.Arrays.asList(seedIds));
+    }
+
+    public PprQueryBuilder PPR(java.util.Collection<?> seedIds) {
+        return new PprQueryBuilder(this, seedIds);
+    }
+
     public CommunityQueryBuilder Community() {
         return new CommunityQueryBuilder(this, CommunityType.COMMUNITY);
     }
