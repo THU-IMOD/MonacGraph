@@ -315,9 +315,9 @@ result.size()`
     query: 'g.BFS(1).executeForWeb()'
   },
   {
-    title: 'ShortestPath: 1 -> 4',
-    description: 'Cheapest OUT-directed path from vertex 1 to vertex 4',
-    query: 'g.ShortestPath(1, 4).executeForWeb()'
+    title: 'ShortestPath: Find the Shortest Path',
+    description: 'Cheapest OUT-directed path from vertex 0 to vertex 1',
+    query: 'g.ShortestPath(0, 1).executeForWeb()'
   }
 ])
 

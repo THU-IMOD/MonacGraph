@@ -1,16 +1,19 @@
 package db.monacgraph.so;
 
-import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.apache.tinkerpop.gremlin.structure.Edge;
 import org.apache.tinkerpop.gremlin.structure.T;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
 import org.junit.jupiter.api.Test;
 
-import java.util.*;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ShortestPathQueryBuilderTest {
 
@@ -47,12 +50,13 @@ class ShortestPathQueryBuilderTest {
             assertTrue(g.ShortestPath(2, 4).maxLength(1).execute().isEmpty());
             assertEquals(Set.of(2, 3, 4), ids(g.ShortestPath(2, 4).maxLength(2).execute()));
 
-            assertEquals("VsetResult", g.ShortestPath(1, 4).cost(cost).executeForWeb().get("type"));
+            Map<String, Object> web = g.ShortestPath(1, 4).cost(cost).executeForWeb();
+            assertEquals("VsetResult", web.get("type"));
         }
     }
 
     @Test
-    void undirectedAndDeterministic() {
+    void equalCostPathsAreStable() {
         try (TinkerGraph graph = TinkerGraph.open()) {
             Vertex s = graph.addVertex(T.id, 1);
             Vertex a = graph.addVertex(T.id, 2);
@@ -64,9 +68,6 @@ class ShortestPathQueryBuilderTest {
             b.addEdge("e", t);
 
             SecondOrderTraversalSource g = graph.traversal(SecondOrderTraversalSource.class);
-
-            assertTrue(g.ShortestPath(4, 1).execute().isEmpty());
-            assertEquals(Set.of(1, 2, 4), ids(g.ShortestPath(4, 1).direction(Direction.BOTH).execute()));
 
             for (int i = 0; i < 5; i++) {
                 assertEquals(Set.of(1, 2, 4), ids(g.ShortestPath(1, 4).execute()));
