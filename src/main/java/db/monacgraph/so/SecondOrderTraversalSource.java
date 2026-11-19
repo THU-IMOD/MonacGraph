@@ -3,6 +3,8 @@ package db.monacgraph.so;
 import org.apache.tinkerpop.gremlin.process.traversal.TraversalStrategies;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.structure.Graph;
+import org.apache.tinkerpop.gremlin.structure.Vertex;
+import java.util.Collection;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -84,6 +86,10 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
 
     public BfsQueryBuilder BFS(Object id) {
         return new BfsQueryBuilder(this, id);
+    }
+
+    public InducedQueryBuilder Induced(Collection<? extends Vertex> vertices) {
+        return new InducedQueryBuilder(vertices);
     }
 
     /** Entry point for second-order subgraph pattern matching queries. */

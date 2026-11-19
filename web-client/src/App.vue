@@ -305,6 +305,11 @@ result.size()`
     query: 'g.Community().executeForWeb()'
   },
   {
+    title: 'Induced: Subgraph on Selected Vertices',
+    description: 'Keep Alice, Bob, Charlie and all edges between them in the test data.',
+    query: 'g.Induced(g.V(1, 2, 3).toList()).executeForWeb()'
+  },
+  {
     title: 'KHop: Two-hop Neighborhood',
     description: 'Vertices within 2 hops of vertex 1 (both directions), including the seed',
     query: 'g.KHop(1).depth(2).executeForWeb()'
