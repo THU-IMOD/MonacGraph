@@ -313,6 +313,11 @@ result.size()`
     title: 'BFS: Reachable Vertices',
     description: 'Find all vertices reachable from vertex 1',
     query: 'g.BFS(1).executeForWeb()'
+  },
+  {
+    title: 'ShortestPath: Find the Shortest Path',
+    description: 'Cheapest OUT-directed path from vertex 0 to vertex 1',
+    query: 'g.ShortestPath(0, 1).executeForWeb()'
   }
 ])
 
