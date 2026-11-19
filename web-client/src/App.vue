@@ -310,6 +310,11 @@ result.size()`
     query: 'g.KHop(1).depth(2).executeForWeb()'
   },
   {
+    title: 'CommonNeighbors: Shared Neighbors',
+    description: 'Find shared neighbors in either direction. With the test data, Alice (1) and Charlie (3) share Bob (2).',
+    query: 'g.CommonNeighbors(1, 3).executeForWeb()'
+  },
+  {
     title: 'BFS: Reachable Vertices',
     description: 'Find all vertices reachable from vertex 1',
     query: 'g.BFS(1).executeForWeb()'

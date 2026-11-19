@@ -82,6 +82,10 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
         return new KHopQueryBuilder(this, id);
     }
 
+    public CommonNeighborsQueryBuilder CommonNeighbors(Object sourceId, Object targetId) {
+        return new CommonNeighborsQueryBuilder(this, sourceId, targetId);
+    }
+
     public BfsQueryBuilder BFS(Object id) {
         return new BfsQueryBuilder(this, id);
     }
