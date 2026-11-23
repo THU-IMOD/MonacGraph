@@ -313,6 +313,14 @@ result.size()`
     title: 'BFS: Reachable Vertices',
     description: 'Find all vertices reachable from vertex 1',
     query: 'g.BFS(1).executeForWeb()'
+  },
+  {
+    title: 'PCST: Use Graph Properties',
+    description: 'Use vertex prize and edge cost properties',
+    query: `g.PCST()
+    .prize('prize')
+    .cost('cost')
+    .executeForWeb()`
   }
 ])
 
