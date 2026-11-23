@@ -376,7 +376,9 @@ public class CommunityGraph implements Graph, Serializable {
         // Parse edge ID from properties
         Object edgeId = null;
         for (int i = 0; i < keyValues.length; i += 2) {
-            if (keyValues[i].toString().equals(T.id.getAccessor())) {
+            Object key = keyValues[i];
+
+            if (key == T.id || T.id.getAccessor().equals(key)) {
                 edgeId = keyValues[i + 1];
             }
         }

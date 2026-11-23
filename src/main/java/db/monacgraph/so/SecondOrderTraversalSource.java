@@ -86,6 +86,10 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
         return new BfsQueryBuilder(this, id);
     }
 
+    public PCSTQueryBuilder PCST() {
+        return new PCSTQueryBuilder(this);
+    }
+    
     /** Entry point for second-order subgraph pattern matching queries. */
     public SubgraphQueryBuilder Subgraph() {
         return new SubgraphQueryBuilder(this);
