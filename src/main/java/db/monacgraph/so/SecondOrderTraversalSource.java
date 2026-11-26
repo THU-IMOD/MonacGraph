@@ -82,6 +82,11 @@ public class SecondOrderTraversalSource extends GraphTraversalSource {
         return new KHopQueryBuilder(this, id);
     }
 
+    /** Directed cheapest path from source to target. */
+    public ShortestPathQueryBuilder ShortestPath(Object sourceId, Object targetId) {
+        return new ShortestPathQueryBuilder(this, sourceId, targetId);
+    }
+
     public BfsQueryBuilder BFS(Object id) {
         return new BfsQueryBuilder(this, id);
     }
